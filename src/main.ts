@@ -1,99 +1,167 @@
-import {App, Editor, MarkdownView, Modal, Notice, Plugin} from 'obsidian';
-import {DEFAULT_SETTINGS, MyPluginSettings, SampleSettingTab} from "./settings";
+import { Plugin, Notice, WorkspaceLeaf } from 'obsidian';
+import { AITriageSettings, DEFAULT_SETTINGS, AITriageSettingTab } from './settings';
+import { OllamaClient } from './ollama-client';
+import { TriageQueue } from './triage-queue';
+import { RateLimitedWatcher } from './file-watcher';
+import { TRIAGE_QUEUE_VIEW_TYPE, TriageQueueView } from './views/triage-queue-view';
+import { CHAT_SIDEBAR_VIEW_TYPE, ChatSidebarView } from './views/chat-sidebar-view';
 
-// Remember to rename these classes and interfaces!
-
-export default class MyPlugin extends Plugin {
-	settings: MyPluginSettings;
+export default class AITriagePlugin extends Plugin {
+	settings: AITriageSettings;
+	ollama: OllamaClient;
+	triageQueue: TriageQueue;
+	fileWatcher: RateLimitedWatcher;
+	statusBarEl: HTMLElement;
 
 	async onload() {
+		console.log('Loading AI Triage plugin');
+
 		await this.loadSettings();
 
-		// This creates an icon in the left ribbon.
-		this.addRibbonIcon('dice', 'Sample', (evt: MouseEvent) => {
-			// Called when the user clicks the icon.
-			new Notice('This is a notice!');
+		// Initialize core services
+		this.ollama = new OllamaClient(this.settings);
+		this.triageQueue = new TriageQueue(this);
+		await this.triageQueue.load();
+
+		// Initialize file watcher
+		this.fileWatcher = new RateLimitedWatcher(this, this.ollama, this.triageQueue);
+
+		// Register views
+		this.registerView(
+			TRIAGE_QUEUE_VIEW_TYPE,
+			(leaf) => new TriageQueueView(leaf, this)
+		);
+
+		this.registerView(
+			CHAT_SIDEBAR_VIEW_TYPE,
+			(leaf) => new ChatSidebarView(leaf, this)
+		);
+
+		// Add ribbon icon for triage queue
+		this.addRibbonIcon('inbox', 'Open Triage Queue', () => {
+			this.activateTriageQueueView();
 		});
 
-		// This adds a status bar item to the bottom of the app. Does not work on mobile apps.
-		const statusBarItemEl = this.addStatusBarItem();
-		statusBarItemEl.setText('Status bar text');
+		// Status bar for pending items count
+		this.statusBarEl = this.addStatusBarItem();
+		this.updateStatusBar();
 
-		// This adds a simple command that can be triggered anywhere
+		// Register commands
 		this.addCommand({
-			id: 'open-modal-simple',
-			name: 'Open modal (simple)',
-			callback: () => {
-				new SampleModal(this.app).open();
-			}
+			id: 'open-triage-queue',
+			name: 'Open Triage Queue',
+			callback: () => this.activateTriageQueueView(),
 		});
-		// This adds an editor command that can perform some operation on the current editor instance
-		this.addCommand({
-			id: 'replace-selected',
-			name: 'Replace selected content',
-			editorCallback: (editor: Editor, view: MarkdownView) => {
-				editor.replaceSelection('Sample editor command');
-			}
-		});
-		// This adds a complex command that can check whether the current state of the app allows execution of the command
-		this.addCommand({
-			id: 'open-modal-complex',
-			name: 'Open modal (complex)',
-			checkCallback: (checking: boolean) => {
-				// Conditions to check
-				const markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
-				if (markdownView) {
-					// If checking is true, we're simply "checking" if the command can be run.
-					// If checking is false, then we want to actually perform the operation.
-					if (!checking) {
-						new SampleModal(this.app).open();
-					}
 
-					// This command will only show up in Command Palette when the check function returns true
-					return true;
+		this.addCommand({
+			id: 'open-chat-sidebar',
+			name: 'Chat about current note',
+			callback: () => this.activateChatSidebar(),
+		});
+
+		this.addCommand({
+			id: 'generate-weekly-report',
+			name: 'Generate Weekly Report',
+			callback: () => this.generateWeeklyReport(),
+		});
+
+		this.addCommand({
+			id: 'test-ollama-connection',
+			name: 'Test Ollama Connection',
+			callback: async () => {
+				const result = await this.ollama.testConnection();
+				if (result.success) {
+					new Notice(`✓ Ollama connected: ${result.model}`);
+				} else {
+					new Notice(`✗ Ollama error: ${result.error}`);
 				}
-				return false;
-			}
+			},
 		});
 
-		// This adds a settings tab so the user can configure various aspects of the plugin
-		this.addSettingTab(new SampleSettingTab(this.app, this));
+		// Add settings tab
+		this.addSettingTab(new AITriageSettingTab(this.app, this));
 
-		// If the plugin hooks up any global DOM events (on parts of the app that doesn't belong to this plugin)
-		// Using this function will automatically remove the event listener when this plugin is disabled.
-		this.registerDomEvent(document, 'click', (evt: MouseEvent) => {
-			new Notice("Click");
-		});
+		// Start file watcher if enabled
+		if (this.settings.autoTriageEnabled) {
+			this.fileWatcher.start();
+		}
 
-		// When registering intervals, this function will automatically clear the interval when the plugin is disabled.
-		this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
-
+		// Subscribe to queue changes for status bar updates
+		this.triageQueue.on('change', () => this.updateStatusBar());
 	}
 
 	onunload() {
+		console.log('Unloading AI Triage plugin');
+		this.fileWatcher?.stop();
 	}
 
 	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData() as Partial<MyPluginSettings>);
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
 	}
 
 	async saveSettings() {
 		await this.saveData(this.settings);
-	}
-}
-
-class SampleModal extends Modal {
-	constructor(app: App) {
-		super(app);
+		// Update services with new settings
+		this.ollama?.updateSettings(this.settings);
+		this.fileWatcher?.updateSettings(this.settings);
 	}
 
-	onOpen() {
-		let {contentEl} = this;
-		contentEl.setText('Woah!');
+	updateStatusBar() {
+		const pendingCount = this.triageQueue.getPendingCount();
+		if (pendingCount > 0) {
+			this.statusBarEl.setText(`📥 ${pendingCount} pending`);
+			this.statusBarEl.addClass('ai-triage-pending');
+		} else {
+			this.statusBarEl.setText('');
+			this.statusBarEl.removeClass('ai-triage-pending');
+		}
 	}
 
-	onClose() {
-		const {contentEl} = this;
-		contentEl.empty();
+	async activateTriageQueueView() {
+		const { workspace } = this.app;
+
+		let leaf: WorkspaceLeaf | undefined;
+		const leaves = workspace.getLeavesOfType(TRIAGE_QUEUE_VIEW_TYPE);
+
+		if (leaves.length > 0) {
+			leaf = leaves[0];
+		} else {
+			const rightLeaf = workspace.getRightLeaf(false);
+			if (rightLeaf) {
+				await rightLeaf.setViewState({ type: TRIAGE_QUEUE_VIEW_TYPE, active: true });
+				leaf = rightLeaf;
+			}
+		}
+
+		if (leaf) {
+			workspace.revealLeaf(leaf);
+		}
+	}
+
+	async activateChatSidebar() {
+		const { workspace } = this.app;
+
+		let leaf: WorkspaceLeaf | undefined;
+		const leaves = workspace.getLeavesOfType(CHAT_SIDEBAR_VIEW_TYPE);
+
+		if (leaves.length > 0) {
+			leaf = leaves[0];
+		} else {
+			const rightLeaf = workspace.getRightLeaf(false);
+			if (rightLeaf) {
+				await rightLeaf.setViewState({ type: CHAT_SIDEBAR_VIEW_TYPE, active: true });
+				leaf = rightLeaf;
+			}
+		}
+
+		if (leaf) {
+			workspace.revealLeaf(leaf);
+		}
+	}
+
+	async generateWeeklyReport() {
+		new Notice('Generating weekly report...');
+		// TODO: Implement weekly report generation
+		new Notice('Weekly report feature coming soon');
 	}
 }

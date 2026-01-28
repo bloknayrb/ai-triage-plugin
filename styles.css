@@ -1,8 +1,274 @@
-/*
+/* AI Triage Plugin Styles */
 
-This CSS file will be included with your plugin, and
-available in the app when your plugin is enabled.
+/* Status Bar */
+.ai-triage-pending {
+	color: var(--text-accent);
+	font-weight: 500;
+	cursor: pointer;
+}
 
-If your plugin does not need CSS, delete this file.
+.ai-triage-pending:hover {
+	text-decoration: underline;
+}
 
-*/
+/* Triage Queue View */
+.ai-triage-queue-view {
+	padding: 10px;
+}
+
+.triage-queue-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 15px;
+	padding-bottom: 10px;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.triage-queue-header h4 {
+	margin: 0;
+}
+
+.triage-queue-count {
+	font-size: 0.85em;
+	color: var(--text-muted);
+	background: var(--background-modifier-hover);
+	padding: 2px 8px;
+	border-radius: 10px;
+}
+
+.triage-queue-empty {
+	text-align: center;
+	padding: 40px 20px;
+	color: var(--text-muted);
+}
+
+.triage-queue-empty-hint {
+	font-size: 0.85em;
+}
+
+/* Triage Item */
+.triage-item {
+	background: var(--background-secondary);
+	border-radius: 8px;
+	padding: 12px;
+	margin-bottom: 10px;
+	border: 1px solid var(--background-modifier-border);
+}
+
+.triage-item:hover {
+	border-color: var(--interactive-accent);
+}
+
+.triage-category {
+	display: inline-block;
+	font-size: 0.75em;
+	padding: 2px 8px;
+	border-radius: 4px;
+	background: var(--background-modifier-hover);
+	margin-bottom: 8px;
+}
+
+.triage-category-deliverable_review { background: var(--color-blue); color: white; }
+.triage-category-change_order { background: var(--color-orange); color: white; }
+.triage-category-testing_milestone { background: var(--color-green); color: white; }
+.triage-category-interoperability_issue { background: var(--color-red); color: white; }
+.triage-category-unclear { background: var(--color-yellow); color: black; }
+
+.triage-item-title {
+	margin-bottom: 6px;
+}
+
+.triage-item-meta {
+	display: flex;
+	gap: 10px;
+	font-size: 0.85em;
+	color: var(--text-muted);
+	margin-bottom: 8px;
+}
+
+.triage-client {
+	background: var(--background-modifier-hover);
+	padding: 1px 6px;
+	border-radius: 3px;
+}
+
+.triage-priority {
+	font-weight: 500;
+}
+
+.triage-priority-critical { color: var(--color-red); }
+.triage-priority-high { color: var(--color-orange); }
+.triage-priority-medium { color: var(--color-yellow); }
+.triage-priority-low { color: var(--text-muted); }
+
+.triage-confidence {
+	font-size: 0.8em;
+	color: var(--text-muted);
+}
+
+.triage-reasoning {
+	font-size: 0.85em;
+	color: var(--text-muted);
+	margin: 8px 0;
+	padding: 8px;
+	background: var(--background-primary);
+	border-radius: 4px;
+}
+
+/* Category-specific field sections */
+.triage-deliverable-fields,
+.triage-co-fields,
+.triage-testing-fields,
+.triage-interop-fields {
+	font-size: 0.85em;
+	color: var(--text-muted);
+	margin: 6px 0;
+}
+
+.urgent {
+	color: var(--color-red);
+	font-weight: 500;
+}
+
+/* Action Buttons */
+.triage-actions {
+	display: flex;
+	gap: 8px;
+	margin-top: 10px;
+	padding-top: 10px;
+	border-top: 1px solid var(--background-modifier-border);
+}
+
+.triage-action-btn {
+	padding: 4px 12px;
+	border-radius: 4px;
+	font-size: 0.85em;
+	cursor: pointer;
+	border: 1px solid var(--background-modifier-border);
+	background: var(--background-primary);
+}
+
+.triage-action-btn:hover {
+	background: var(--background-modifier-hover);
+}
+
+.triage-action-create {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	border: none;
+}
+
+.triage-action-create:hover {
+	background: var(--interactive-accent-hover);
+}
+
+.triage-action-dismiss {
+	color: var(--text-muted);
+}
+
+/* Chat Sidebar */
+.ai-triage-chat-sidebar {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	padding: 10px;
+}
+
+.chat-header {
+	margin-bottom: 10px;
+}
+
+.chat-header h4 {
+	margin: 0 0 10px 0;
+}
+
+.chat-tabs {
+	display: flex;
+	gap: 5px;
+}
+
+.chat-tab {
+	padding: 4px 12px;
+	border: none;
+	background: var(--background-modifier-hover);
+	border-radius: 4px;
+	cursor: pointer;
+}
+
+.chat-tab.active {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+.chat-messages {
+	flex: 1;
+	overflow-y: auto;
+	margin-bottom: 10px;
+	padding: 10px;
+	background: var(--background-primary);
+	border-radius: 8px;
+}
+
+.chat-empty {
+	text-align: center;
+	color: var(--text-muted);
+	padding: 20px;
+}
+
+.chat-hint {
+	font-size: 0.85em;
+	font-style: italic;
+}
+
+.chat-message {
+	margin-bottom: 12px;
+	padding: 8px 12px;
+	border-radius: 8px;
+	max-width: 85%;
+}
+
+.chat-message-user {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	margin-left: auto;
+}
+
+.chat-message-assistant {
+	background: var(--background-secondary);
+}
+
+.chat-loading {
+	text-align: center;
+	color: var(--text-muted);
+	padding: 10px;
+}
+
+.chat-input-container {
+	display: flex;
+	gap: 8px;
+}
+
+.chat-input {
+	flex: 1;
+	resize: none;
+	min-height: 40px;
+	max-height: 100px;
+	padding: 8px;
+	border-radius: 4px;
+	border: 1px solid var(--background-modifier-border);
+	background: var(--background-primary);
+}
+
+.chat-send-btn {
+	padding: 8px 16px;
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	border: none;
+	border-radius: 4px;
+	cursor: pointer;
+}
+
+.chat-send-btn:hover {
+	background: var(--interactive-accent-hover);
+}

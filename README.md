@@ -1,90 +1,144 @@
-# Obsidian Sample Plugin
+# AI Triage Plugin for Obsidian
 
-This is a sample plugin for Obsidian (https://obsidian.md).
+AI-powered triage for incoming emails and Teams messages with tolling domain expertise. Uses **local Ollama only** (127.0.0.1) - no external API calls, keeping your data secure.
 
-This project uses TypeScript to provide type checking and documentation.
-The repo depends on the latest plugin API (obsidian.d.ts) in TypeScript Definition format, which contains TSDoc comments describing what it does.
+## Features
 
-This sample plugin demonstrates some of the basic functionality the plugin API can do.
-- Adds a ribbon icon, which shows a Notice when clicked.
-- Adds a command "Open modal (simple)" which opens a Modal.
-- Adds a plugin setting tab to the settings page.
-- Registers a global click event and output 'click' to the console.
-- Registers a global interval which logs 'setInterval' to the console.
+### Auto-Triage Incoming Items
+- Watches `Emails/`, `TeamsChats/`, and `Calendar/` folders for new files
+- Classifies items into 10 categories using local Ollama (gemma3)
+- Teams messages are batched by conversation (5-minute quiet window) for better context
+- Sensitive files (`#confidential`, `#sensitive`) are automatically skipped
 
-## First time developing plugins?
+### Triage Queue
+- Review AI suggestions before committing changes
+- Edit titles, clients, priorities, and due dates inline
+- Create TaskNotes, link to existing tasks, or dismiss items
+- Persistent across Obsidian restarts
 
-Quick starting guide for new plugin devs:
+### Note Chat Sidebar
+- Ask questions about the currently open note
+- Context-aware responses using local Ollama
+- Suggested task creation goes to Triage Queue for review
 
-- Check if [someone already developed a plugin for what you want](https://obsidian.md/plugins)! There might be an existing plugin similar enough that you can partner up with.
-- Make a copy of this repo as a template with the "Use this template" button (login to GitHub if you don't see it).
-- Clone your repo to a local development folder. For convenience, you can place this folder in your `.obsidian/plugins/your-plugin-name` folder.
-- Install NodeJS, then run `npm i` in the command line under your repo folder.
-- Run `npm run dev` to compile your plugin from `main.ts` to `main.js`.
-- Make changes to `main.ts` (or create new `.ts` files). Those changes should be automatically compiled into `main.js`.
-- Reload Obsidian to load the new version of your plugin.
-- Enable plugin in settings window.
-- For updates to the Obsidian API run `npm update` in the command line under your repo folder.
+### Tolling Domain Expertise
+Built-in knowledge of:
+- **Clients**: DRPA, VDOT, MDTA, DelDOT
+- **Vendors**: TransCore, Conduent, Kapsch, Neology
+- **Documents**: SDDD, ICD, Test Plans, O&M Manuals
+- **Testing**: FAT, IAT, SAT, OAT, UAT phases
+- **Interoperability**: IAG, E-ZPass, reciprocity issues
 
-## Releasing new releases
+### Classification Categories
+1. `DELIVERABLE_REVIEW` - Vendor submittal requiring review
+2. `CHANGE_ORDER` - Contract modification request
+3. `TESTING_MILESTONE` - FAT/IAT/SAT/OAT coordination
+4. `INTEROPERABILITY_ISSUE` - IAG/reciprocity problems (auto-flagged if financial impact)
+5. `SYSTEM_ISSUE` - Operational problems
+6. `MEETING_FOLLOWUP` - Meeting notes with action items
+7. `VENDOR_CORRESPONDENCE` - General vendor communications
+8. `CLIENT_CORRESPONDENCE` - Toll authority communications
+9. `INFORMATIONAL` - FYI only
+10. `UNCLEAR` - Flagged for human review
 
-- Update your `manifest.json` with your new version number, such as `1.0.1`, and the minimum Obsidian version required for your latest release.
-- Update your `versions.json` file with `"new-plugin-version": "minimum-obsidian-version"` so older versions of Obsidian can download an older version of your plugin that's compatible.
-- Create new GitHub release using your new version number as the "Tag version". Use the exact version number, don't include a prefix `v`. See here for an example: https://github.com/obsidianmd/obsidian-sample-plugin/releases
-- Upload the files `manifest.json`, `main.js`, `styles.css` as binary attachments. Note: The manifest.json file must be in two places, first the root path of your repository and also in the release.
-- Publish the release.
+## Requirements
 
-> You can simplify the version bump process by running `npm version patch`, `npm version minor` or `npm version major` after updating `minAppVersion` manually in `manifest.json`.
-> The command will bump version in `manifest.json` and `package.json`, and add the entry for the new version to `versions.json`
+- **Obsidian** 1.0.0 or later
+- **Ollama** running locally on port 11434
+  - Recommended model: `gemma3:latest` for triage/chat
+  - Optional: `qwen3-embedding:8b` for semantic search
 
-## Adding your plugin to the community plugin list
+## Installation
 
-- Check the [plugin guidelines](https://docs.obsidian.md/Plugins/Releasing/Plugin+guidelines).
-- Publish an initial version.
-- Make sure you have a `README.md` file in the root of your repo.
-- Make a pull request at https://github.com/obsidianmd/obsidian-releases to add your plugin.
-
-## How to use
-
-- Clone this repo.
-- Make sure your NodeJS is at least v16 (`node --version`).
-- `npm i` or `yarn` to install dependencies.
-- `npm run dev` to start compilation in watch mode.
-
-## Manually installing the plugin
-
-- Copy over `main.js`, `styles.css`, `manifest.json` to your vault `VaultFolder/.obsidian/plugins/your-plugin-id/`.
-
-## Improve code quality with eslint
-- [ESLint](https://eslint.org/) is a tool that analyzes your code to quickly find problems. You can run ESLint against your plugin to find common bugs and ways to improve your code. 
-- This project already has eslint preconfigured, you can invoke a check by running`npm run lint`
-- Together with a custom eslint [plugin](https://github.com/obsidianmd/eslint-plugin) for Obsidan specific code guidelines.
-- A GitHub action is preconfigured to automatically lint every commit on all branches.
-
-## Funding URL
-
-You can include funding URLs where people who use your plugin can financially support it.
-
-The simple way is to set the `fundingUrl` field to your link in your `manifest.json` file:
-
-```json
-{
-    "fundingUrl": "https://buymeacoffee.com"
-}
+### From Source
+```bash
+git clone https://github.com/bkolb/ai-triage-plugin.git
+cd ai-triage-plugin
+npm install
+npm run build
 ```
 
-If you have multiple URLs, you can also do:
-
-```json
-{
-    "fundingUrl": {
-        "Buy Me a Coffee": "https://buymeacoffee.com",
-        "GitHub Sponsor": "https://github.com/sponsors",
-        "Patreon": "https://www.patreon.com/"
-    }
-}
+Then copy `main.js`, `styles.css`, and `manifest.json` to:
+```
+YourVault/.obsidian/plugins/ai-triage/
 ```
 
-## API Documentation
+### Development
+```bash
+npm run dev   # Watch mode with auto-rebuild
+```
 
-See https://docs.obsidian.md
+## Configuration
+
+Open Settings → AI Triage to configure:
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| Triage Model | `gemma3:latest` | Ollama model for classification |
+| Embedding Model | `qwen3-embedding:8b` | Model for semantic search |
+| Watched Folders | `Emails/, TeamsChats/, Calendar/` | Folders to monitor |
+| Skip Tags | `#confidential, #sensitive` | Tags that prevent triage |
+| Default Client | `DRPA` | Client when not auto-detected |
+| Teams Batch Delay | 5 minutes | Wait time before triaging Teams conversations |
+| Max Concurrent Triages | 2 | Rate limiting |
+
+## Commands
+
+| Command | Hotkey | Description |
+|---------|--------|-------------|
+| Open Triage Queue | - | Opens the triage queue sidebar |
+| Chat about current note | - | Opens chat sidebar for active note |
+| Generate Weekly Report | - | Creates 9-section status report |
+| Test Ollama Connection | - | Verifies Ollama is running |
+
+## Security
+
+This plugin prioritizes security:
+
+- **Local only**: Ollama URL is hardcoded to `127.0.0.1:11434` - no DNS resolution, no external calls
+- **No process spawning**: All AI calls are HTTP to local Ollama
+- **Input sanitization**: Content is escaped before sending to LLM
+- **Sensitive file detection**: Files with sensitive tags are never processed
+- **30-second timeout**: Prevents hung requests
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────┐
+│              AI Triage Plugin                        │
+├─────────────────────────────────────────────────────┤
+│  File Watcher → OllamaClient → Triage Queue → Views │
+│       ↓              ↓              ↓               │
+│  Rate Limited    127.0.0.1     Persistent JSON      │
+│  Teams Batching  30s timeout   Event-driven UI      │
+└─────────────────────────────────────────────────────┘
+                      │
+                      ▼
+            Ollama (localhost:11434)
+            gemma3:latest / qwen3-embedding:8b
+```
+
+## Domain Logic Modules
+
+The plugin includes pure TypeScript modules for tolling domain logic:
+
+- `domain/deliverables.ts` - Review periods, deadline calculation, business days
+- `domain/change-orders.ts` - CO lifecycle, review checklists
+- `domain/testing.ts` - FAT/IAT/SAT/OAT/UAT definitions
+- `domain/interoperability.ts` - IAG issue detection, urgency classification
+- `domain/escalation.ts` - Deadline escalation rules
+
+## Companion to TaskNotes
+
+This plugin is designed to complement the TaskNotes plugin:
+- AI Triage handles **incoming item classification**
+- TaskNotes handles **task management** (views, kanban, calendar)
+- Created tasks follow the TaskNotes YAML frontmatter schema
+
+## License
+
+MIT
+
+## Author
+
+Brian Kolb
