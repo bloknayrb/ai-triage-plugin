@@ -23,9 +23,9 @@ export type InteropUrgency = 'critical' | 'elevated' | 'standard';
  * Patterns that indicate critical interoperability issues
  */
 export const CRITICAL_INTEROP_PATTERNS = [
-	/iag\s*file\s*(missing|rejected|failed)/i,
+	/iag\s*file\s*(is\s*)?(missing|rejected|failed)/i,
 	/reciprocity\s*(failure|failed|down)/i,
-	/hub\s*(down|offline|unavailable)/i,
+	/hub\s*(is\s*)?(down|offline|unavailable)/i,
 	/missing\s*transactions?/i,
 	/duplicate\s*charges?/i,
 	/revenue\s*(discrepancy|loss|impact)/i,
