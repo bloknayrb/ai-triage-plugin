@@ -3,6 +3,7 @@ import AITriagePlugin from '../main';
 import { TriageItem, TriageCategory } from '../triage-queue';
 import { TaskNoteCreator, inferProject, getProjectsForClient } from '../tasknote-creator';
 import { CreateTaskModal, CreateTaskModalResult } from '../modals/create-task-modal';
+import { LinkTaskModal, TaskSuggestion } from '../modals/link-task-modal';
 
 export const TRIAGE_QUEUE_VIEW_TYPE = 'ai-triage-queue-view';
 
@@ -320,8 +321,85 @@ export class TriageQueueView extends ItemView {
 	}
 
 	private async handleLinkToTask(item: TriageItem): Promise<void> {
-		// TODO: Implement task linking modal
-		console.log('Link to task:', item);
+		try {
+			const modal = new LinkTaskModal(
+				this.app,
+				this.plugin.settings.taskNotesFolder,
+				async (selectedTask: TaskSuggestion) => {
+					try {
+						// Validate file still exists
+						const taskFile = this.app.vault.getAbstractFileByPath(selectedTask.file.path);
+						if (!(taskFile instanceof TFile)) {
+							new Notice(`Task file no longer exists: ${selectedTask.file.path}`);
+							return;
+						}
+
+						// Append link to TaskNote (with duplicate check, returns false if duplicate)
+						const linkAdded = await this.appendLinkToTaskNote(taskFile, item);
+						if (!linkAdded) {
+							return; // Duplicate - notice already shown
+						}
+
+						// Mark reviewed only after successful link
+						await this.plugin.triageQueue.markReviewed(
+							item.id,
+							'linked_task',
+							selectedTask.file.path
+						);
+
+						new Notice(`Linked to: ${selectedTask.title}`);
+					} catch (error) {
+						const msg = error instanceof Error ? error.message : String(error);
+						console.error('Failed to link to task:', error);
+						new Notice(`Error linking: ${msg}`);
+					}
+				}
+			);
+			modal.open();
+		} catch (error) {
+			const msg = error instanceof Error ? error.message : String(error);
+			console.error('Failed to open link modal:', error);
+			new Notice(`Error: ${msg}`);
+		}
+	}
+
+	/**
+	 * Append a link to the source file in the TaskNote's "Linked Items" section
+	 * Uses vault.process() for atomic read-modify-write
+	 * @returns true if link was added, false if it was a duplicate
+	 */
+	private async appendLinkToTaskNote(taskFile: TFile, item: TriageItem): Promise<boolean> {
+		// Handle any file extension, not just .md
+		const sourceLink = item.fileName.replace(/\.[^/.]+$/, '');
+
+		let linkAdded = false;
+
+		// Use vault.process() for atomic read-modify-write
+		await this.app.vault.process(taskFile, (content) => {
+			// Check for duplicate link (handles [[link]] and [[link|alias]] formats)
+			const escapedLink = sourceLink.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+			const linkPattern = new RegExp(`\\[\\[${escapedLink}(\\|[^\\]]*)?\\]\\]`);
+			if (linkPattern.test(content)) {
+				new Notice(`Already linked: ${sourceLink}`);
+				return content; // Return unchanged
+			}
+
+			const today = new Date().toISOString().split('T')[0];
+			const linkLine = `- [[${sourceLink}]] (linked ${today})`;
+			linkAdded = true;
+
+			// Robust heading detection (handles ## or ### with optional whitespace)
+			const headingMatch = content.match(/^(#{1,6}\s*Linked Items\s*)$/m);
+			if (headingMatch) {
+				// Insert after the heading
+				return content.replace(headingMatch[0], `${headingMatch[0]}\n${linkLine}`);
+			} else {
+				// Append new section at the end
+				return content.trimEnd() + `\n\n## Linked Items\n\n${linkLine}\n`;
+			}
+		});
+
+		return linkAdded;
 	}
 
 	private async handleDismiss(item: TriageItem): Promise<void> {

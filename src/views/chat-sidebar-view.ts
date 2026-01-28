@@ -151,6 +151,16 @@ export class ChatSidebarView extends ItemView {
 		loadingEl.createEl('span', { text: 'Thinking...' });
 
 		try {
+			// Check if Ollama client is available
+			if (!this.plugin.ollama) {
+				this.messages.push({
+					role: 'assistant',
+					content: 'Chat unavailable: Ollama client not initialized. Check plugin settings.',
+					timestamp: Date.now()
+				});
+				return;
+			}
+
 			// Build prompt with context
 			const prompt = this.buildPrompt(query, context);
 

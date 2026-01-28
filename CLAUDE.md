@@ -33,7 +33,9 @@ src/
 │   ├── escalation.ts       # Deadline escalation rules
 │   └── generic-task.ts     # Generic TaskNote generator
 ├── modals/
-│   └── create-task-modal.ts      # TaskNote creation confirmation modal
+│   ├── create-task-modal.ts      # TaskNote creation confirmation modal
+│   ├── folder-suggest-modal.ts   # Folder picker with fuzzy search
+│   └── link-task-modal.ts        # TaskNote picker for linking
 ├── prompts/
 │   └── tolling-triage-prompt.ts  # Triage system prompt
 ├── views/
@@ -106,6 +108,8 @@ The `TaskNoteCreator` routes to specialized generators based on triage category:
 - View shells (Triage Queue, Chat Sidebar)
 - Domain logic modules (deliverables, change orders, testing, interop, escalation)
 - "Create Task" button generates TaskNotes with category-specific content
+- Folder autocomplete modal for watched folders setting (FolderSuggestModal)
+- Link to Task modal for associating triage items with existing TaskNotes
 
 ### TODO
 - Wire "Link to Task" button with task picker modal

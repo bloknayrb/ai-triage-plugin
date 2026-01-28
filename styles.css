@@ -167,6 +167,78 @@
 	color: var(--text-muted);
 }
 
+/* Link Task Modal - Suggestion Items */
+.link-task-suggestion {
+	padding: 6px 10px;
+}
+
+.link-task-title {
+	font-weight: 500;
+	margin-bottom: 2px;
+}
+
+.link-task-meta {
+	font-size: 0.85em;
+	color: var(--text-muted);
+	display: flex;
+	gap: 8px;
+	align-items: center;
+}
+
+.link-task-badge {
+	display: inline-block;
+	padding: 1px 6px;
+	border-radius: 3px;
+	font-size: 0.8em;
+}
+
+.link-task-status-open { background: var(--color-blue); color: white; }
+.link-task-status-in_progress { background: var(--color-green); color: white; }
+.link-task-status-completed {
+	background: var(--background-modifier-success);
+	opacity: 0.6;
+}
+.link-task-status-unknown { background: var(--background-modifier-hover); }
+
+.link-task-priority-critical { background: var(--color-red); color: white; }
+.link-task-priority-high { background: var(--color-orange); color: white; }
+.link-task-priority-medium { background: var(--color-yellow); }
+.link-task-priority-low { background: var(--background-secondary); }
+
+.link-task-client {
+	font-weight: 500;
+}
+
+.link-task-project {
+	font-style: italic;
+}
+
+/* Folder Suggest Modal */
+.folder-suggest-item {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 6px 10px;
+}
+
+.folder-suggest-icon {
+	flex-shrink: 0;
+	display: flex;
+	align-items: center;
+	color: var(--text-muted);
+}
+
+.folder-suggest-path {
+	font-family: var(--font-monospace);
+	font-size: 0.9em;
+}
+
+.folder-suggest-depth-1 { padding-left: 16px; }
+.folder-suggest-depth-2 { padding-left: 32px; }
+.folder-suggest-depth-3 { padding-left: 48px; }
+.folder-suggest-depth-4 { padding-left: 64px; }
+.folder-suggest-depth-5 { padding-left: 80px; }
+
 /* Chat Sidebar */
 .ai-triage-chat-sidebar {
 	display: flex;

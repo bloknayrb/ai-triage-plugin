@@ -1,5 +1,6 @@
 import { App, PluginSettingTab, Setting, Notice } from 'obsidian';
 import AITriagePlugin from './main';
+import { FolderSuggestModal } from './modals/folder-suggest-modal';
 
 export interface AITriageSettings {
 	// Ollama Configuration
@@ -167,18 +168,54 @@ export class AITriageSettingTab extends PluginSettingTab {
 		// --- Watched Folders ---
 		containerEl.createEl('h2', { text: 'Watched Folders' });
 
+		let watchedFoldersTextArea: HTMLTextAreaElement;
+
 		new Setting(containerEl)
 			.setName('Folders to Watch')
 			.setDesc('Comma-separated list of folders to monitor for new files')
-			.addTextArea(text => text
-				.setPlaceholder('Emails/, TeamsChats/, Calendar/')
-				.setValue(this.plugin.settings.watchedFolders.join(', '))
-				.onChange(async (value) => {
-					this.plugin.settings.watchedFolders = value
-						.split(',')
-						.map(f => f.trim())
-						.filter(f => f.length > 0);
-					await this.plugin.saveSettings();
+			.addTextArea(text => {
+				watchedFoldersTextArea = text.inputEl;
+				text.setPlaceholder('Emails/, TeamsChats/, Calendar/')
+					.setValue(this.plugin.settings.watchedFolders.join(', '))
+					.onChange(async (value) => {
+						this.plugin.settings.watchedFolders = value
+							.split(',')
+							.map(f => f.trim())
+							.filter(f => f.length > 0);
+						await this.plugin.saveSettings();
+					});
+			})
+			.addButton(button => button
+				.setButtonText('Add Folder')
+				.setIcon('folder-plus')
+				.onClick(() => {
+					new FolderSuggestModal(
+						this.app,
+						(selected) => {
+							// Normalize path with trailing slash for storage
+							const pathWithSlash = selected.path.endsWith('/')
+								? selected.path
+								: selected.path + '/';
+
+							// Check for duplicates (comparing normalized paths)
+							const normalizedPath = selected.path.replace(/\/+$/, '');
+							const existingNormalized = this.plugin.settings.watchedFolders
+								.map(f => f.replace(/\/+$/, ''));
+
+							if (existingNormalized.includes(normalizedPath)) {
+								new Notice(`"${selected.path}" is already in the watch list`);
+								return;
+							}
+
+							// Append to settings and save
+							this.plugin.settings.watchedFolders.push(pathWithSlash);
+							void this.plugin.saveSettings();
+
+							// Update textarea display
+							watchedFoldersTextArea.value = this.plugin.settings.watchedFolders.join(', ');
+						},
+						this.plugin.settings.watchedFolders
+					).open();
 				}));
 
 		// --- Sensitive Content ---

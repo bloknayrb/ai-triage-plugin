@@ -16,17 +16,40 @@ export default class AITriagePlugin extends Plugin {
 	async onload() {
 		console.log('Loading AI Triage plugin');
 
-		await this.loadSettings();
+		try {
+			await this.loadSettings();
+		} catch (error) {
+			console.error('AI Triage: Failed to load settings:', error);
+			new Notice('AI Triage: Failed to load settings');
+			return;
+		}
 
-		// Initialize core services
-		this.ollama = new OllamaClient(this.settings);
-		this.triageQueue = new TriageQueue(this);
-		await this.triageQueue.load();
+		// Initialize core services with error handling
+		try {
+			this.ollama = new OllamaClient(this.settings);
+		} catch (error) {
+			console.error('AI Triage: Failed to initialize Ollama client:', error);
+			new Notice('AI Triage: Failed to initialize Ollama client');
+		}
+
+		try {
+			this.triageQueue = new TriageQueue(this);
+			await this.triageQueue.load();
+		} catch (error) {
+			console.error('AI Triage: Failed to load triage queue:', error);
+			new Notice('AI Triage: Failed to load triage queue');
+			// Create empty queue so plugin can still load
+			this.triageQueue = new TriageQueue(this);
+		}
 
 		// Initialize file watcher
-		this.fileWatcher = new RateLimitedWatcher(this, this.ollama, this.triageQueue);
+		try {
+			this.fileWatcher = new RateLimitedWatcher(this, this.ollama, this.triageQueue);
+		} catch (error) {
+			console.error('AI Triage: Failed to initialize file watcher:', error);
+		}
 
-		// Register views
+		// Register views - these should never fail
 		this.registerView(
 			TRIAGE_QUEUE_VIEW_TYPE,
 			(leaf) => new TriageQueueView(leaf, this)
@@ -44,6 +67,9 @@ export default class AITriagePlugin extends Plugin {
 
 		// Status bar for pending items count
 		this.statusBarEl = this.addStatusBarItem();
+		this.statusBarEl.addEventListener('click', () => {
+			this.activateTriageQueueView();
+		});
 		this.updateStatusBar();
 
 		// Register commands
@@ -69,6 +95,10 @@ export default class AITriagePlugin extends Plugin {
 			id: 'test-ollama-connection',
 			name: 'Test Ollama Connection',
 			callback: async () => {
+				if (!this.ollama) {
+					new Notice('✗ Ollama client not initialized');
+					return;
+				}
 				const result = await this.ollama.testConnection();
 				if (result.success) {
 					new Notice(`✓ Ollama connected: ${result.model}`);
@@ -81,13 +111,19 @@ export default class AITriagePlugin extends Plugin {
 		// Add settings tab
 		this.addSettingTab(new AITriageSettingTab(this.app, this));
 
-		// Start file watcher if enabled
-		if (this.settings.autoTriageEnabled) {
-			this.fileWatcher.start();
+		// Start file watcher if enabled (delay slightly to avoid blocking workspace load)
+		if (this.settings.autoTriageEnabled && this.fileWatcher) {
+			setTimeout(() => {
+				this.fileWatcher?.start();
+			}, 1000);
 		}
 
 		// Subscribe to queue changes for status bar updates
-		this.triageQueue.on('change', () => this.updateStatusBar());
+		if (this.triageQueue) {
+			this.triageQueue.on('change', () => this.updateStatusBar());
+		}
+
+		console.log('AI Triage plugin loaded successfully');
 	}
 
 	onunload() {
@@ -107,7 +143,9 @@ export default class AITriagePlugin extends Plugin {
 	}
 
 	updateStatusBar() {
-		const pendingCount = this.triageQueue.getPendingCount();
+		if (!this.statusBarEl) return;
+
+		const pendingCount = this.triageQueue?.getPendingCount() ?? 0;
 		if (pendingCount > 0) {
 			this.statusBarEl.setText(`📥 ${pendingCount} pending`);
 			this.statusBarEl.addClass('ai-triage-pending');
