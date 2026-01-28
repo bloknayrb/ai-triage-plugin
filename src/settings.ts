@@ -27,6 +27,12 @@ export interface AITriageSettings {
 
 	// SimpleMem Integration
 	autoIndexTeamsToSimpleMem: boolean;
+	simpleMemBatchWindowMinutes: number;
+
+	// TaskNote Creation
+	taskNotesFolder: string;
+	projectsBasePath: string;
+	openTaskAfterCreation: boolean;
 
 	// UI Preferences
 	showToastNotifications: boolean;
@@ -51,7 +57,7 @@ export const DEFAULT_SETTINGS: AITriageSettings = {
 	skipTaggedFiles: ['confidential', 'sensitive', 'private'],
 
 	// Client configuration
-	defaultClient: 'DRPA',
+	defaultClient: '',
 	vendorEmailDomains: {
 		'transcore.com': 'TransCore',
 		'conduent.com': 'Conduent',
@@ -67,6 +73,12 @@ export const DEFAULT_SETTINGS: AITriageSettings = {
 
 	// SimpleMem
 	autoIndexTeamsToSimpleMem: true,
+	simpleMemBatchWindowMinutes: 5,
+
+	// TaskNote Creation
+	taskNotesFolder: 'TaskNotes',
+	projectsBasePath: '01-Projects',
+	openTaskAfterCreation: true,
 
 	// UI
 	showToastNotifications: true
@@ -191,9 +203,10 @@ export class AITriageSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName('Default Client')
-			.setDesc('Default client for new tasks when not detected')
+			.setDesc('Default client for new tasks when not detected (optional)')
 			.addDropdown(dropdown => dropdown
 				.addOptions({
+					'': '(None)',
 					'DRPA': 'DRPA',
 					'VDOT': 'VDOT',
 					'MDTA': 'MDTA',
@@ -224,20 +237,6 @@ export class AITriageSettingTab extends PluginSettingTab {
 				}));
 
 		new Setting(containerEl)
-			.setName('Teams Batch Delay')
-			.setDesc('Minutes to wait for Teams conversation to settle before triage')
-			.addText(text => text
-				.setPlaceholder('5')
-				.setValue(String(this.plugin.settings.teamsBatchDelayMinutes))
-				.onChange(async (value) => {
-					const num = parseInt(value, 10);
-					if (!isNaN(num) && num > 0) {
-						this.plugin.settings.teamsBatchDelayMinutes = num;
-						await this.plugin.saveSettings();
-					}
-				}));
-
-		new Setting(containerEl)
 			.setName('Max Concurrent Triages')
 			.setDesc('Maximum number of files to triage simultaneously')
 			.addText(text => text
@@ -251,16 +250,75 @@ export class AITriageSettingTab extends PluginSettingTab {
 					}
 				}));
 
-		// --- SimpleMem Integration ---
-		containerEl.createEl('h2', { text: 'SimpleMem Integration' });
+		// --- Teams Chat Indexing ---
+		containerEl.createEl('h2', { text: 'Teams Chat Indexing' });
 
 		new Setting(containerEl)
-			.setName('Auto-Index Teams Messages')
-			.setDesc('Automatically index Teams messages to SimpleMem for semantic search')
+			.setName('Batch Window (minutes)')
+			.setDesc('Wait this many minutes after the last message before triaging a Teams conversation. This groups rapid-fire messages into a single triage item.')
+			.addSlider(slider => slider
+				.setLimits(1, 30, 1)
+				.setValue(this.plugin.settings.teamsBatchDelayMinutes)
+				.setDynamicTooltip()
+				.onChange(async (value) => {
+					this.plugin.settings.teamsBatchDelayMinutes = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('Auto-Index to SimpleMem')
+			.setDesc('Automatically index all Teams messages to SimpleMem for semantic search')
 			.addToggle(toggle => toggle
 				.setValue(this.plugin.settings.autoIndexTeamsToSimpleMem)
 				.onChange(async (value) => {
 					this.plugin.settings.autoIndexTeamsToSimpleMem = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('SimpleMem Batch Window (minutes)')
+			.setDesc('Wait this many minutes after the last message before finalizing SimpleMem indexing. Groups dialogues for better semantic compression.')
+			.addSlider(slider => slider
+				.setLimits(1, 30, 1)
+				.setValue(this.plugin.settings.simpleMemBatchWindowMinutes)
+				.setDynamicTooltip()
+				.onChange(async (value) => {
+					this.plugin.settings.simpleMemBatchWindowMinutes = value;
+					await this.plugin.saveSettings();
+				}));
+
+		// --- TaskNote Creation ---
+		containerEl.createEl('h2', { text: 'TaskNote Creation' });
+
+		new Setting(containerEl)
+			.setName('TaskNotes Folder')
+			.setDesc('Folder where new TaskNotes will be created')
+			.addText(text => text
+				.setPlaceholder('TaskNotes')
+				.setValue(this.plugin.settings.taskNotesFolder)
+				.onChange(async (value) => {
+					this.plugin.settings.taskNotesFolder = value || 'TaskNotes';
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('Projects Base Path')
+			.setDesc('Base folder for project discovery (e.g., 01-Projects)')
+			.addText(text => text
+				.setPlaceholder('01-Projects')
+				.setValue(this.plugin.settings.projectsBasePath)
+				.onChange(async (value) => {
+					this.plugin.settings.projectsBasePath = value || '01-Projects';
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('Open Task After Creation')
+			.setDesc('Automatically open the TaskNote after creating it')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.openTaskAfterCreation)
+				.onChange(async (value) => {
+					this.plugin.settings.openTaskAfterCreation = value;
 					await this.plugin.saveSettings();
 				}));
 

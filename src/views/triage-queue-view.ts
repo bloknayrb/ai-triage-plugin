@@ -1,6 +1,8 @@
-import { ItemView, WorkspaceLeaf } from 'obsidian';
+import { ItemView, WorkspaceLeaf, TFile, Notice } from 'obsidian';
 import AITriagePlugin from '../main';
 import { TriageItem, TriageCategory } from '../triage-queue';
+import { TaskNoteCreator, inferProject, getProjectsForClient } from '../tasknote-creator';
+import { CreateTaskModal, CreateTaskModalResult } from '../modals/create-task-modal';
 
 export const TRIAGE_QUEUE_VIEW_TYPE = 'ai-triage-queue-view';
 
@@ -32,14 +34,18 @@ export class TriageQueueView extends ItemView {
 		this.contentEl.empty();
 		this.contentEl.addClass('ai-triage-queue-view');
 
-		// Subscribe to queue changes
-		this.plugin.triageQueue.on('change', this.changeListener);
+		// Subscribe to queue changes (with null check)
+		if (this.plugin.triageQueue) {
+			this.plugin.triageQueue.on('change', this.changeListener);
+		}
 
 		this.render();
 	}
 
 	async onClose(): Promise<void> {
-		this.plugin.triageQueue.off('change', this.changeListener);
+		if (this.plugin.triageQueue) {
+			this.plugin.triageQueue.off('change', this.changeListener);
+		}
 	}
 
 	private render(): void {
@@ -47,6 +53,13 @@ export class TriageQueueView extends ItemView {
 
 		const header = this.contentEl.createDiv({ cls: 'triage-queue-header' });
 		header.createEl('h4', { text: 'Triage Queue' });
+
+		// Guard against uninitialized queue
+		if (!this.plugin.triageQueue) {
+			const errorState = this.contentEl.createDiv({ cls: 'triage-queue-empty' });
+			errorState.createEl('p', { text: 'Plugin still initializing...' });
+			return;
+		}
 
 		const pendingItems = this.plugin.triageQueue.getPendingItems();
 
@@ -212,9 +225,98 @@ export class TriageQueueView extends ItemView {
 	}
 
 	private async handleCreateTask(item: TriageItem): Promise<void> {
-		// TODO: Implement TaskNote creation
-		console.log('Create task for:', item);
-		await this.plugin.triageQueue.markReviewed(item.id, 'created_task');
+		try {
+			const creator = new TaskNoteCreator(this.app.vault, this.plugin.settings);
+
+			// Merge user edits with suggestion
+			const finalSuggestion = {
+				...item.suggestion,
+				...item.userEdits
+			};
+
+			// Get source content for project inference
+			const sourceContent = await this.getSourceContent(item.filePath);
+			const client = finalSuggestion.client || this.plugin.settings.defaultClient || '';
+
+			// Infer project from content
+			const inferredProject = inferProject(sourceContent, client);
+
+			// Get available projects for the client
+			const availableProjects = await getProjectsForClient(
+				this.app.vault,
+				client,
+				this.plugin.settings.projectsBasePath
+			);
+
+			// Show confirmation modal
+			new CreateTaskModal(
+				this.app,
+				item,
+				inferredProject,
+				availableProjects,
+				async (result: CreateTaskModalResult) => {
+					if (!result.confirmed) {
+						return;
+					}
+
+					// Build overrides from modal result
+					const overrides: Partial<typeof finalSuggestion> = {};
+					if (result.title) {
+						overrides.title = result.title;
+					}
+					if (result.priority) {
+						overrides.priority = result.priority;
+					}
+					if (result.dueDate) {
+						overrides.dueDate = result.dueDate;
+					}
+
+					// Create the TaskNote
+					const createResult = await creator.createFromTriageItem({
+						item,
+						project: result.project,
+						overrides
+					});
+
+					if (!createResult.success) {
+						new Notice(`Failed to create task: ${createResult.error}`);
+						return;
+					}
+
+					// Mark the triage item as reviewed
+					await this.plugin.triageQueue.markReviewed(
+						item.id,
+						'created_task',
+						createResult.taskNotePath
+					);
+
+					// Open the new TaskNote if setting enabled
+					if (this.plugin.settings.openTaskAfterCreation && createResult.taskNotePath) {
+						const file = this.app.vault.getAbstractFileByPath(createResult.taskNotePath);
+						if (file instanceof TFile) {
+							await this.app.workspace.getLeaf().openFile(file);
+						}
+					}
+
+					new Notice(`Created: ${createResult.taskNotePath}`);
+				}
+			).open();
+		} catch (error) {
+			const errorMessage = error instanceof Error ? error.message : String(error);
+			console.error('Failed to create task:', error);
+			new Notice(`Error creating task: ${errorMessage}`);
+		}
+	}
+
+	/**
+	 * Get the content of a source file
+	 */
+	private async getSourceContent(filePath: string): Promise<string> {
+		const file = this.app.vault.getAbstractFileByPath(filePath);
+		if (file instanceof TFile) {
+			return await this.app.vault.read(file);
+		}
+		return '';
 	}
 
 	private async handleLinkToTask(item: TriageItem): Promise<void> {

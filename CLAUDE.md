@@ -24,12 +24,16 @@ src/
 ├── ollama-client.ts        # Local Ollama API client
 ├── triage-queue.ts         # Queue persistence and state
 ├── file-watcher.ts         # Rate-limited file monitoring
+├── tasknote-creator.ts     # TaskNote creation orchestrator
 ├── domain/                 # Pure TypeScript domain logic (no Obsidian deps)
 │   ├── deliverables.ts     # Review periods, deadlines, business days
 │   ├── change-orders.ts    # CO lifecycle and checklists
 │   ├── testing.ts          # FAT/IAT/SAT/OAT definitions
 │   ├── interoperability.ts # IAG issue detection
-│   └── escalation.ts       # Deadline escalation rules
+│   ├── escalation.ts       # Deadline escalation rules
+│   └── generic-task.ts     # Generic TaskNote generator
+├── modals/
+│   └── create-task-modal.ts      # TaskNote creation confirmation modal
 ├── prompts/
 │   └── tolling-triage-prompt.ts  # Triage system prompt
 ├── views/
@@ -69,6 +73,28 @@ The `src/domain/` modules are **pure TypeScript with no Obsidian imports**. This
 
 When adding domain logic, keep it in these modules rather than mixing with Obsidian code.
 
+## TaskNote Creation
+
+The "Create Task" button in the Triage Queue view generates TaskNote files:
+
+### Category-Based Dispatch
+The `TaskNoteCreator` routes to specialized generators based on triage category:
+- `DELIVERABLE_REVIEW` → `generateDeliverableTaskNoteContent()`
+- `CHANGE_ORDER` → `generateChangeOrderTaskNoteContent()`
+- `TESTING_MILESTONE` → `generateTestingMilestoneContent()`
+- `INTEROPERABILITY_ISSUE` → `generateInteropIssueContent()`
+- All others → `generateGenericTaskNoteContent()`
+
+### Project Inference
+- Scans source file content for keywords (NIOP, CSC, IAG, E-ZPass, etc.)
+- Discovers available projects by scanning `{projectsBasePath}/{Client}/` folders
+- User can override via dropdown in the confirmation modal
+
+### Settings
+- `taskNotesFolder` - Where TaskNotes are created (default: `TaskNotes`)
+- `projectsBasePath` - Base folder for project discovery (default: `01-Projects`)
+- `openTaskAfterCreation` - Auto-open created TaskNote (default: true)
+
 ## Current Status
 
 ### Completed
@@ -79,9 +105,9 @@ When adding domain logic, keep it in these modules rather than mixing with Obsid
 - Triage prompts with tolling domain knowledge
 - View shells (Triage Queue, Chat Sidebar)
 - Domain logic modules (deliverables, change orders, testing, interop, escalation)
+- "Create Task" button generates TaskNotes with category-specific content
 
 ### TODO
-- Wire "Create Task" button to generate TaskNotes
 - Wire "Link to Task" button with task picker modal
 - Implement inline editing in Triage Queue
 - Implement weekly report generation

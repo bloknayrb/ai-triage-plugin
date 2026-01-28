@@ -213,27 +213,122 @@ export function generateDeliverableFrontmatter(params: {
 	submissionDate: Date;
 	reviewDeadline?: Date;
 	contractReference?: string;
+	project?: string;
+	sourceFile?: string;
 }): string {
 	const deadline = params.reviewDeadline ??
 		calculateReviewDeadline(params.submissionDate, params.deliverableType, params.client);
 
 	return `---
-title: "${params.title}"
+title: "${escapeYamlString(params.title)}"
 status: open
 priority: high
 client: ${params.client}
+${params.project ? `project: "${escapeYamlString(params.project)}"` : ''}
 task_type: deliverable_review
 created: ${formatDate(new Date())}
 due: ${formatDate(deadline)}
+${params.sourceFile ? `source: "[[${params.sourceFile}]]"` : ''}
 deliverable:
   id: "${params.deliverableType}-${formatDate(params.submissionDate)}"
   type: ${params.deliverableType}
-  ${params.version ? `version: "${params.version}"` : ''}
+  ${params.version ? `version: "${escapeYamlString(params.version)}"` : ''}
   ${params.vendor ? `vendor: ${params.vendor}` : ''}
   submission_date: ${formatDate(params.submissionDate)}
   review_deadline: ${formatDate(deadline)}
-  ${params.contractReference ? `contract_reference: "${params.contractReference}"` : ''}
+  ${params.contractReference ? `contract_reference: "${escapeYamlString(params.contractReference)}"` : ''}
   review_status: under_review
   escalation_level: 0
----`;
+---`.replace(/\n{3,}/g, '\n').replace(/\n  \n/g, '\n');
+}
+
+/**
+ * Generate full TaskNote content for a deliverable review
+ */
+export function generateDeliverableTaskNoteContent(params: {
+	title: string;
+	deliverableType: DeliverableType;
+	version?: string;
+	vendor?: string;
+	client: ClientCode;
+	submissionDate: Date;
+	reviewDeadline?: Date;
+	contractReference?: string;
+	project?: string;
+	sourceFile?: string;
+	reasoning?: string;
+}): string {
+	const frontmatter = generateDeliverableFrontmatter(params);
+	const deadline = params.reviewDeadline ??
+		calculateReviewDeadline(params.submissionDate, params.deliverableType, params.client);
+
+	let content = `${frontmatter}
+
+# ${params.title}
+
+**Type:** ${params.deliverableType}
+${params.version ? `**Version:** ${params.version}` : ''}
+${params.vendor ? `**Vendor:** ${params.vendor}` : ''}
+**Client:** ${params.client}
+**Submission Date:** ${formatDate(params.submissionDate)}
+**Review Deadline:** ${formatDate(deadline)}
+
+`;
+
+	if (params.sourceFile) {
+		content += `## Source
+
+[[${params.sourceFile}]]
+
+`;
+	}
+
+	if (params.reasoning) {
+		content += `## Triage Reasoning
+
+${params.reasoning}
+
+`;
+	}
+
+	content += `## Review Checklist
+
+### Format & Compliance
+- [ ] Document format compliant with standards
+- [ ] All required sections present
+- [ ] Version control information correct
+- [ ] Document numbering consistent
+
+### Technical Content
+- [ ] Technical approach sound
+- [ ] Requirements addressed
+- [ ] Interfaces defined correctly
+- [ ] Dependencies identified
+
+### Completeness
+- [ ] All deliverable components included
+- [ ] Supporting documentation attached
+- [ ] Cross-references valid
+
+## Review Comments
+
+<!-- Add review comments here -->
+
+## Recommendation
+
+<!-- Add recommendation (Approve / Approve with Comments / Reject) -->
+`;
+
+	return content;
+}
+
+/**
+ * Escape special characters for YAML strings
+ */
+function escapeYamlString(str: string): string {
+	return str
+		.replace(/\\/g, '\\\\')
+		.replace(/"/g, '\\"')
+		.replace(/\n/g, ' ')
+		.replace(/\r/g, '');
 }

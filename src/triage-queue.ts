@@ -64,6 +64,7 @@ export interface TriageItem {
 	userEdits?: Partial<TriageSuggestion>;
 	actionTaken?: string;
 	actionTime?: string;
+	createdTaskPath?: string; // Path to TaskNote if created
 }
 
 interface TriageQueueData {
@@ -163,7 +164,8 @@ export class TriageQueue {
 			status: updates.status ?? existingItem.status,
 			userEdits: updates.userEdits ?? existingItem.userEdits,
 			actionTaken: updates.actionTaken ?? existingItem.actionTaken,
-			actionTime: updates.actionTime ?? existingItem.actionTime
+			actionTime: updates.actionTime ?? existingItem.actionTime,
+			createdTaskPath: updates.createdTaskPath ?? existingItem.createdTaskPath
 		};
 		this.items[index] = updatedItem;
 		await this.save();
@@ -188,12 +190,16 @@ export class TriageQueue {
 
 	/**
 	 * Mark an item as reviewed with an action
+	 * @param id - The triage item ID
+	 * @param action - The action taken (e.g., 'created_task', 'linked_task', 'dismissed')
+	 * @param taskPath - Optional path to the created/linked TaskNote
 	 */
-	async markReviewed(id: string, action: string): Promise<TriageItem | null> {
+	async markReviewed(id: string, action: string, taskPath?: string): Promise<TriageItem | null> {
 		return this.updateItem(id, {
 			status: 'reviewed',
 			actionTaken: action,
-			actionTime: new Date().toISOString()
+			actionTime: new Date().toISOString(),
+			createdTaskPath: taskPath
 		});
 	}
 
