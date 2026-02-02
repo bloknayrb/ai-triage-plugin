@@ -4,6 +4,7 @@ import { OllamaClient } from './ollama-client';
 import { TriageQueue, TriageSuggestion, TriageCategory } from './triage-queue';
 import { AITriageSettings } from './settings';
 import { buildTriagePrompt, parseTriageResponse } from './prompts/tolling-triage-prompt';
+import { TriageContextLoader } from './context-loader';
 
 interface QueuedFile {
 	file: TFile;
@@ -17,6 +18,16 @@ interface TeamsConversationBuffer {
 }
 
 /**
+ * Result of a manual folder scan
+ */
+export interface ScanResult {
+	filesToTriage: TFile[];
+	skippedAlreadyQueued: number;
+	skippedSensitive: number;
+	skippedTooOld: number;
+}
+
+/**
  * Rate-limited file watcher with debouncing and concurrency control
  */
 export class RateLimitedWatcher {
@@ -24,6 +35,7 @@ export class RateLimitedWatcher {
 	private ollama: OllamaClient;
 	private triageQueue: TriageQueue;
 	private settings: AITriageSettings;
+	private contextLoader: TriageContextLoader;
 
 	private fileQueue: QueuedFile[] = [];
 	private processing = false;
@@ -33,12 +45,15 @@ export class RateLimitedWatcher {
 	private debounceTimers: Map<string, NodeJS.Timeout> = new Map();
 
 	private isWatching = false;
+	private isScanning = false;
+	private scanAborted = false;
 
 	constructor(plugin: AITriagePlugin, ollama: OllamaClient, triageQueue: TriageQueue) {
 		this.plugin = plugin;
 		this.ollama = ollama;
 		this.triageQueue = triageQueue;
 		this.settings = plugin.settings;
+		this.contextLoader = new TriageContextLoader(plugin.app.vault);
 	}
 
 	updateSettings(settings: AITriageSettings): void {
@@ -87,6 +102,108 @@ export class RateLimitedWatcher {
 		this.debounceTimers.clear();
 
 		console.log('AI Triage: File watcher stopped');
+	}
+
+	/**
+	 * Check if a manual scan is currently in progress
+	 */
+	isScanInProgress(): boolean {
+		return this.isScanning;
+	}
+
+	/**
+	 * Preview what files would be scanned (does not queue anything)
+	 * Useful for showing a count before committing to the scan
+	 */
+	async previewScan(): Promise<ScanResult> {
+		const result: ScanResult = {
+			filesToTriage: [],
+			skippedAlreadyQueued: 0,
+			skippedSensitive: 0,
+			skippedTooOld: 0
+		};
+
+		// Calculate cutoff time based on lookback days
+		const lookbackDays = this.settings.scanLookbackDays;
+		const lookbackMs = lookbackDays > 0
+			? lookbackDays * 24 * 60 * 60 * 1000
+			: Infinity;
+		const cutoffTime = Date.now() - lookbackMs;
+
+		// Get all markdown files from vault
+		const allFiles = this.plugin.app.vault.getMarkdownFiles();
+
+		for (const file of allFiles) {
+			// Check if in watched folder
+			if (!this.isWatchedFile(file)) continue;
+
+			// Check modification time
+			if (file.stat.mtime < cutoffTime) {
+				result.skippedTooOld++;
+				continue;
+			}
+
+			// Check if already in queue
+			if (this.triageQueue.hasFilePath(file.path)) {
+				result.skippedAlreadyQueued++;
+				continue;
+			}
+
+			// Check for sensitive content
+			if (await this.isSensitiveFile(file)) {
+				result.skippedSensitive++;
+				continue;
+			}
+
+			result.filesToTriage.push(file);
+		}
+
+		return result;
+	}
+
+	/**
+	 * Execute a manual scan of watched folders and queue discovered files
+	 * @returns Number of files queued for triage
+	 */
+	async executeScan(): Promise<number> {
+		if (this.isScanning) {
+			throw new Error('Scan already in progress');
+		}
+
+		this.isScanning = true;
+		this.scanAborted = false;
+
+		try {
+			const preview = await this.previewScan();
+
+			// Queue each file for triage
+			for (const file of preview.filesToTriage) {
+				if (this.scanAborted) {
+					console.log('AI Triage: Scan aborted by user');
+					break;
+				}
+
+				// Add to internal file queue
+				this.fileQueue.push({ file, addedAt: Date.now() });
+			}
+
+			// Trigger processing of queued files
+			this.processQueue();
+
+			return preview.filesToTriage.length;
+		} finally {
+			this.isScanning = false;
+			this.scanAborted = false;
+		}
+	}
+
+	/**
+	 * Cancel an in-progress scan
+	 */
+	cancelScan(): void {
+		if (this.isScanning) {
+			this.scanAborted = true;
+		}
 	}
 
 	/**
@@ -355,8 +472,19 @@ export class RateLimitedWatcher {
 		sourcePath: string
 	): Promise<TriageSuggestion | null> {
 		try {
-			// Build the triage prompt
-			const prompt = buildTriagePrompt(content, subject, this.settings.defaultClient);
+			// Load dynamic context (cached, sanitized)
+			const contextResult = await this.contextLoader.load(this.settings.triageContextPath);
+			if (contextResult.warning) {
+				console.warn('AI Triage context warning:', contextResult.warning);
+			}
+
+			// Build the triage prompt with optional dynamic context
+			const prompt = buildTriagePrompt(
+				content,
+				subject,
+				this.settings.defaultClient,
+				contextResult.content || undefined
+			);
 
 			// Call Ollama
 			const response = await this.ollama.generate(prompt);

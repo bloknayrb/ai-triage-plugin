@@ -139,6 +139,8 @@ Zod schemas matching the state file structure:
 - **Ollama URL is hardcoded to 127.0.0.1** - never allow DNS resolution or external URLs
 - State file is read-only (dashboard doesn't write)
 - Files with `#confidential` or `#sensitive` tags are never processed
+- **Path traversal protection** - TaskNote paths validated before opening (no `..`, `//`, or absolute paths)
+- **Runtime type validation** - All AI responses validated with Zod schemas before use
 
 ### Obsidian API Patterns
 - Views extend `ItemView` and use `contentEl`
@@ -210,9 +212,28 @@ To test the plugin:
 - `obsidian` - Obsidian plugin API
 - `zod` - Runtime schema validation for state file parsing
 
-## Current Status (v0.3.0)
+## Current Status (v0.3.1)
 
-### Completed
+### v0.3.1 - Code Quality & Security (2026-02-02)
+
+**Critical Fixes:**
+- Fixed memory leak: interval management now uses only `registerInterval()` (no manual cleanup conflicts)
+- Fixed duplicate StateLoader: views now share plugin's StateLoader instance via getter
+- Fixed unhandled promise rejection in vault modify event handler
+- Fixed cache race condition: StateLoader cache update is now atomic
+
+**Security Hardening:**
+- Added Zod schema validation for AI triage responses (runtime type safety)
+- Added path traversal protection for TaskNote file opening
+- Removed deprecated `execCommand('copy')` fallback (modern Clipboard API only)
+
+**Code Quality:**
+- Consolidated duplicate view activation into single `activateView()` method
+- Extracted helper methods: `findTaskNoteFile()`, `extractSentReportsFromState()`, `extractErrorContext()`
+- Simplified validation using Zod schema methods
+- Added missing export for `generic-task.ts` in domain module
+
+### v0.3.0 - Weekly PIP Reports
 - Priority Dashboard view with PIP coaching
 - State loader with Zod validation and caching
 - Dashboard sections: overdue, due this week, stated priorities, habits
@@ -225,3 +246,4 @@ To test the plugin:
 ### Future Enhancements
 - Chat sidebar for "chat with notes" feature
 - SimpleMem MCP integration for Teams indexing
+- Legacy code cleanup (~1,200 lines could be moved to src/legacy/)

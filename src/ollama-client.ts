@@ -49,9 +49,7 @@ export class OllamaClient {
 		try {
 			const response = await fetch(`${this.baseUrl}/api/tags`, {
 				method: 'GET',
-				headers: {
-					'User-Agent': 'Obsidian-AI-Triage/1.0'
-				},
+				headers: { 'User-Agent': 'Obsidian-AI-Triage/1.0' },
 				signal: controller.signal
 			});
 
@@ -60,25 +58,25 @@ export class OllamaClient {
 			}
 
 			const data = await response.json();
-			const models = data.models?.map((m: { name: string }) => m.name) || [];
+			const models = data.models?.map((m: { name: string }) => m.name) ?? [];
+			const model = models.includes(this.triageModel) ? this.triageModel : (models[0] ?? 'unknown');
 
-			return {
-				success: true,
-				model: models.includes(this.triageModel)
-					? this.triageModel
-					: models[0] || 'unknown'
-			};
+			return { success: true, model };
 		} catch (error) {
-			if (error instanceof Error) {
-				if (error.name === 'AbortError') {
-					return { success: false, error: 'Connection timeout' };
-				}
-				return { success: false, error: error.message };
-			}
-			return { success: false, error: 'Unknown error' };
+			return { success: false, error: this.formatFetchError(error) };
 		} finally {
 			clearTimeout(timeoutId);
 		}
+	}
+
+	/**
+	 * Format a fetch error into a user-friendly message
+	 */
+	private formatFetchError(error: unknown): string {
+		if (error instanceof Error) {
+			return error.name === 'AbortError' ? 'Connection timeout' : error.message;
+		}
+		return 'Unknown error';
 	}
 
 	/**
@@ -94,7 +92,10 @@ export class OllamaClient {
 			const body: Record<string, unknown> = {
 				model: this.triageModel,
 				prompt: this.sanitizeInput(prompt),
-				stream: false
+				stream: false,
+				options: {
+					num_ctx: 16384  // Increase from 8K default to handle enhanced prompt + context
+				}
 			};
 
 			if (systemPrompt) {
@@ -118,13 +119,7 @@ export class OllamaClient {
 			const data: OllamaGenerateResponse = await response.json();
 			return data.response;
 		} catch (error) {
-			if (error instanceof Error) {
-				if (error.name === 'AbortError') {
-					throw new Error('Ollama request timed out');
-				}
-				throw error;
-			}
-			throw new Error('Unknown Ollama error');
+			throw this.createTimeoutOrRethrow(error, 'Ollama request timed out');
 		} finally {
 			clearTimeout(timeoutId);
 		}
@@ -164,16 +159,23 @@ export class OllamaClient {
 			}
 			return embedding;
 		} catch (error) {
-			if (error instanceof Error) {
-				if (error.name === 'AbortError') {
-					throw new Error('Ollama embed request timed out');
-				}
-				throw error;
-			}
-			throw new Error('Unknown Ollama embed error');
+			throw this.createTimeoutOrRethrow(error, 'Ollama embed request timed out');
 		} finally {
 			clearTimeout(timeoutId);
 		}
+	}
+
+	/**
+	 * Handle timeout errors consistently across methods
+	 */
+	private createTimeoutOrRethrow(error: unknown, timeoutMessage: string): Error {
+		if (error instanceof Error) {
+			if (error.name === 'AbortError') {
+				return new Error(timeoutMessage);
+			}
+			return error;
+		}
+		return new Error('Unknown Ollama error');
 	}
 
 	/**

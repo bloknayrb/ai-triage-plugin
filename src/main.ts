@@ -1,4 +1,4 @@
-import { Plugin, Notice, WorkspaceLeaf, TFile } from 'obsidian';
+import { Plugin, Notice, TFile } from 'obsidian';
 import { AITriageSettings, DEFAULT_SETTINGS, AITriageSettingTab } from './settings';
 import { OllamaClient } from './ollama-client';
 import { TriageQueue } from './triage-queue';
@@ -17,7 +17,6 @@ export default class AITriagePlugin extends Plugin {
 	stateLoader: StateLoader;
 	weeklyReportGenerator: WeeklyReportGenerator;
 	statusBarEl: HTMLElement;
-	private reportCheckInterval: number | null = null;
 	private lastReportCheckHour: number = -1;
 
 	// Legacy: kept for backwards compatibility
@@ -103,15 +102,12 @@ export default class AITriagePlugin extends Plugin {
 			id: 'refresh-dashboard',
 			name: 'Refresh Priority Dashboard',
 			callback: async () => {
-				// Find existing dashboard view and refresh it
-				const leaves = this.app.workspace.getLeavesOfType(PRIORITY_DASHBOARD_VIEW_TYPE);
-				const leaf = leaves[0];
+				const leaf = this.app.workspace.getLeavesOfType(PRIORITY_DASHBOARD_VIEW_TYPE)[0];
 				if (leaf) {
 					const view = leaf.view as PriorityDashboardView;
 					await view.refreshDashboard();
 					new Notice('Dashboard refreshed');
 				} else {
-					// Open dashboard if not open
 					await this.activateDashboardView();
 				}
 			},
@@ -129,6 +125,19 @@ export default class AITriagePlugin extends Plugin {
 			callback: () => this.generateWeeklyReport(),
 		});
 
+		this.addCommand({
+			id: 'generate-eod-draft',
+			name: 'Generate EOD Status Draft',
+			callback: async () => {
+				await this.activateDashboardView();
+				const leaf = this.app.workspace.getLeavesOfType(PRIORITY_DASHBOARD_VIEW_TYPE)[0];
+				if (leaf) {
+					const view = leaf.view as PriorityDashboardView;
+					view.openEODDraftModalFromCommand();
+				}
+			},
+		});
+
 		// Legacy command (kept for backwards compatibility)
 		this.addCommand({
 			id: 'test-ollama-connection',
@@ -139,11 +148,10 @@ export default class AITriagePlugin extends Plugin {
 					return;
 				}
 				const result = await this.ollama.testConnection();
-				if (result.success) {
-					new Notice(`Ollama connected: ${result.model}`);
-				} else {
-					new Notice(`Ollama error: ${result.error}`);
-				}
+				const message = result.success
+					? `Ollama connected: ${result.model}`
+					: `Ollama error: ${result.error}`;
+				new Notice(message);
 			},
 		});
 
@@ -168,7 +176,7 @@ export default class AITriagePlugin extends Plugin {
 	onunload() {
 		console.log('Unloading Priority Dashboard plugin');
 		this.fileWatcher?.stop();
-		this.stopReportScheduler();
+		// Note: registerInterval handles cleanup automatically on unload
 	}
 
 	async loadSettings() {
@@ -182,12 +190,8 @@ export default class AITriagePlugin extends Plugin {
 		this.fileWatcher?.updateSettings(this.settings);
 		this.weeklyReportGenerator?.updateReportsFolder(this.settings.weeklyReportsFolder);
 
-		// Update scheduler based on settings
-		if (this.settings.autoGenerateWeeklyReport) {
-			this.startReportScheduler();
-		} else {
-			this.stopReportScheduler();
-		}
+		// Note: Report scheduler is set up once on load
+		// Changing the autoGenerateWeeklyReport setting requires a reload to take effect
 	}
 
 	async updateStatusBar() {
@@ -216,46 +220,31 @@ export default class AITriagePlugin extends Plugin {
 		}
 	}
 
-	async activateDashboardView() {
+	/**
+	 * Activate a view in the right sidebar, reusing existing leaf if available
+	 */
+	private async activateView(viewType: string): Promise<void> {
 		const { workspace } = this.app;
+		const existingLeaf = workspace.getLeavesOfType(viewType)[0];
 
-		let leaf: WorkspaceLeaf | undefined;
-		const leaves = workspace.getLeavesOfType(PRIORITY_DASHBOARD_VIEW_TYPE);
-
-		if (leaves.length > 0) {
-			leaf = leaves[0];
-		} else {
-			const rightLeaf = workspace.getRightLeaf(false);
-			if (rightLeaf) {
-				await rightLeaf.setViewState({ type: PRIORITY_DASHBOARD_VIEW_TYPE, active: true });
-				leaf = rightLeaf;
-			}
+		if (existingLeaf) {
+			workspace.revealLeaf(existingLeaf);
+			return;
 		}
 
-		if (leaf) {
-			workspace.revealLeaf(leaf);
+		const rightLeaf = workspace.getRightLeaf(false);
+		if (rightLeaf) {
+			await rightLeaf.setViewState({ type: viewType, active: true });
+			workspace.revealLeaf(rightLeaf);
 		}
 	}
 
-	async activateChatSidebar() {
-		const { workspace } = this.app;
+	async activateDashboardView(): Promise<void> {
+		await this.activateView(PRIORITY_DASHBOARD_VIEW_TYPE);
+	}
 
-		let leaf: WorkspaceLeaf | undefined;
-		const leaves = workspace.getLeavesOfType(CHAT_SIDEBAR_VIEW_TYPE);
-
-		if (leaves.length > 0) {
-			leaf = leaves[0];
-		} else {
-			const rightLeaf = workspace.getRightLeaf(false);
-			if (rightLeaf) {
-				await rightLeaf.setViewState({ type: CHAT_SIDEBAR_VIEW_TYPE, active: true });
-				leaf = rightLeaf;
-			}
-		}
-
-		if (leaf) {
-			workspace.revealLeaf(leaf);
-		}
+	async activateChatSidebar(): Promise<void> {
+		await this.activateView(CHAT_SIDEBAR_VIEW_TYPE);
 	}
 
 	/**
@@ -300,30 +289,19 @@ export default class AITriagePlugin extends Plugin {
 
 	/**
 	 * Start the hourly scheduler for auto-generating weekly reports
+	 * Uses registerInterval for automatic cleanup on plugin unload
 	 */
 	private startReportScheduler(): void {
-		// Clear existing interval if any
-		this.stopReportScheduler();
-
 		// Check every hour (3600000ms)
-		this.reportCheckInterval = window.setInterval(
+		// registerInterval handles cleanup automatically on unload
+		const interval = window.setInterval(
 			() => this.checkAndGenerateReport(),
 			60 * 60 * 1000
 		);
-		this.registerInterval(this.reportCheckInterval);
+		this.registerInterval(interval);
 
 		// Also do an immediate check
 		this.checkAndGenerateReport();
-	}
-
-	/**
-	 * Stop the report scheduler
-	 */
-	private stopReportScheduler(): void {
-		if (this.reportCheckInterval !== null) {
-			window.clearInterval(this.reportCheckInterval);
-			this.reportCheckInterval = null;
-		}
 	}
 
 	/**

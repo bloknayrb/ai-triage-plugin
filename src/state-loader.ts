@@ -18,6 +18,7 @@ import {
 	DashboardTask,
 	DashboardPipStatus,
 	DashboardCompletedTask,
+	TodaysFocus,
 	ActiveTaskNote,
 	PipTracking,
 	RecentlyCompleted
@@ -60,24 +61,28 @@ function extractJsonBlocks(content: string): string[] {
  */
 function safeJsonParse(jsonString: string, blockIndex: number): { data: unknown; error?: string } {
 	try {
-		const data = JSON.parse(jsonString);
-		return { data };
+		return { data: JSON.parse(jsonString) };
 	} catch (error) {
 		const errorMessage = error instanceof Error ? error.message : String(error);
-		// Try to extract line number from error
-		const lineMatch = errorMessage.match(/position (\d+)/);
-		let context = '';
-		if (lineMatch && lineMatch[1]) {
-			const position = parseInt(lineMatch[1], 10);
-			const start = Math.max(0, position - 50);
-			const end = Math.min(jsonString.length, position + 50);
-			context = `\n  Near: "${jsonString.slice(start, end)}"`;
-		}
+		const context = extractErrorContext(errorMessage, jsonString);
 		return {
 			data: null,
 			error: `JSON block ${blockIndex + 1}: ${errorMessage}${context}`
 		};
 	}
+}
+
+/**
+ * Extract context around a JSON parse error position
+ */
+function extractErrorContext(errorMessage: string, jsonString: string): string {
+	const positionMatch = errorMessage.match(/position (\d+)/);
+	if (!positionMatch?.[1]) return '';
+
+	const position = parseInt(positionMatch[1], 10);
+	const start = Math.max(0, position - 50);
+	const end = Math.min(jsonString.length, position + 50);
+	return `\n  Near: "${jsonString.slice(start, end)}"`;
 }
 
 /**
@@ -205,12 +210,19 @@ function toDashboardPipStatus(pip: PipTracking): DashboardPipStatus {
 }
 
 /**
+ * Cache entry to ensure atomic updates
+ */
+interface CacheEntry {
+	hash: string;
+	state: DashboardState;
+}
+
+/**
  * State Loader class with caching
  */
 export class StateLoader {
 	private vault: Vault;
-	private cachedHash: string | null = null;
-	private cachedState: DashboardState | null = null;
+	private cache: CacheEntry | null = null;
 
 	constructor(vault: Vault) {
 		this.vault = vault;
@@ -236,10 +248,10 @@ export class StateLoader {
 			// Read content
 			const content = await this.vault.read(file);
 
-			// Check cache
+			// Check cache - atomic read
 			const contentHash = simpleHash(content);
-			if (this.cachedHash === contentHash && this.cachedState) {
-				return this.cachedState;
+			if (this.cache && this.cache.hash === contentHash) {
+				return this.cache.state;
 			}
 
 			// Parse the state
@@ -252,9 +264,8 @@ export class StateLoader {
 			// Transform to dashboard state
 			const dashboardState = this.transformToDashboardState(result.data, result.warnings);
 
-			// Cache the result
-			this.cachedHash = contentHash;
-			this.cachedState = dashboardState;
+			// Cache the result - atomic update
+			this.cache = { hash: contentHash, state: dashboardState };
 
 			return dashboardState;
 		} catch (error) {
@@ -267,8 +278,7 @@ export class StateLoader {
 	 * Invalidate the cache (call when you know the file has changed)
 	 */
 	invalidateCache(): void {
-		this.cachedHash = null;
-		this.cachedState = null;
+		this.cache = null;
 	}
 
 	/**
@@ -388,8 +398,16 @@ export class StateLoader {
 				return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
 			});
 
-		// Extract stated priorities
+		// Extract stated priorities (kept for data access, UI uses todaysFocus instead)
 		const statedPriorities = tracking.stated_priorities?.priorities || [];
+
+		// Extract today's focus from current_priorities
+		const todaysFocus: TodaysFocus | undefined = tracking.current_priorities ? {
+			immediateFocus: tracking.current_priorities.immediate_focus || null,
+			nextActions: tracking.current_priorities.bryan_actions_next || null,
+			pipStatus: tracking.current_priorities.pip_status || null,
+			lastScanTime: tracking.last_scan_timestamp || null
+		} : undefined;
 
 		// Transform recently completed tasks
 		const recentlyCompleted = tracking.recently_completed
@@ -414,6 +432,7 @@ export class StateLoader {
 			dueThisWeek,
 			dueNextWeek,
 			statedPriorities,
+			todaysFocus,
 			pipStatus,
 			recentlyCompleted,
 			summaryStats,
@@ -431,6 +450,7 @@ export class StateLoader {
 			dueThisWeek: [],
 			dueNextWeek: [],
 			statedPriorities: [],
+			todaysFocus: undefined,
 			pipStatus: null,
 			summaryStats: {
 				totalTasks: 0,
@@ -453,6 +473,23 @@ export function isAfter2pmEastern(): boolean {
 	const now = new Date();
 	const easternTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
 	return easternTime.getHours() >= 14;
+}
+
+/**
+ * Get today's date in Eastern Time as YYYY-MM-DD string
+ */
+export function getTodayEastern(): string {
+	const now = new Date();
+	const easternStr = now.toLocaleString('en-US', { timeZone: 'America/New_York' });
+	return new Date(easternStr).toISOString().split('T')[0] ?? '';
+}
+
+/**
+ * Check if a date string (YYYY-MM-DD) matches today's date in Eastern Time
+ * Used for EOD status tracking
+ */
+export function isToday(dateStr: string): boolean {
+	return dateStr === getTodayEastern();
 }
 
 /**

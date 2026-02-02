@@ -110,9 +110,7 @@ function getDayLabel(dateStr: string): string {
  * Format date as YYYY-MM-DD
  */
 function formatDate(date: Date): string {
-	const isoString = date.toISOString();
-	const datePart = isoString.split('T')[0];
-	return datePart ?? isoString.slice(0, 10);
+	return date.toISOString().slice(0, 10);
 }
 
 
@@ -453,6 +451,21 @@ export function generateWeeklyReportMarkdown(data: WeeklyReportData): string {
 			lines.push(`| ${milestone.name} | ${milestone.criteriaMet}/${milestone.criteriaTotal} (${milestone.percentage}%) |`);
 		}
 	}
+	lines.push('');
+
+	// Reflection Section
+	lines.push('## My Reflection');
+	lines.push('');
+	lines.push('*Before sending this report to Jeremy, take a moment to reflect:*');
+	lines.push('');
+	lines.push('**What went well this week?**');
+	lines.push('- ');
+	lines.push('');
+	lines.push('**What should I do differently next week?**');
+	lines.push('- ');
+	lines.push('');
+	lines.push('**One specific improvement I commit to:**');
+	lines.push('- ');
 	lines.push('');
 
 	// Footer

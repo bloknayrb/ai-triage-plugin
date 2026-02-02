@@ -8,6 +8,13 @@ export interface AITriageSettings {
 	showPipCoaching: boolean;
 	autoRefreshDashboard: boolean;
 
+	// === EOD Status Tracking (local storage, not in state file) ===
+	eodSentDates: string[];  // Array of YYYY-MM-DD dates when EOD was sent
+
+	// === Mini-Report Tracking (local storage, not in state file) ===
+	miniReportsDismissed: string[];  // Task filenames dismissed from suggestions
+	miniReportsSentManually: { taskFilename: string; sentDate: string }[];  // Reports sent outside state file
+
 	// === Weekly PIP Reports ===
 	weeklyReportsFolder: string;
 	autoGenerateWeeklyReport: boolean;
@@ -51,6 +58,13 @@ export const DEFAULT_SETTINGS: AITriageSettings = {
 	stateFilePath: '99-System/Claude-State-Tracking.md',
 	showPipCoaching: true,
 	autoRefreshDashboard: true,
+
+	// EOD Status Tracking
+	eodSentDates: [],
+
+	// Mini-Report Tracking
+	miniReportsDismissed: [],
+	miniReportsSentManually: [],
 
 	// Weekly PIP Reports
 	weeklyReportsFolder: 'WeeklyReports',

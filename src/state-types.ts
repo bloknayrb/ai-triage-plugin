@@ -132,6 +132,23 @@ export const CheckinEntrySchema = z.object({
 
 export type CheckinEntry = z.infer<typeof CheckinEntrySchema>;
 
+// --- Mini-Report Sent Schema (for state file tracking) ---
+export const MiniReportSentSchema = z.object({
+	taskName: z.string(),
+	sentDate: z.string(),
+	recipient: z.string()
+});
+
+export type MiniReportSent = z.infer<typeof MiniReportSentSchema>;
+
+// --- Mini-Report Tracking Schema ---
+export const MiniReportTrackingSchema = z.object({
+	lastSent: z.string().nullable(),
+	sentThisWeek: z.array(MiniReportSentSchema)
+});
+
+export type MiniReportTracking = z.infer<typeof MiniReportTrackingSchema>;
+
 // --- PIP Tracking Schema ---
 export const PipTrackingSchema = z.object({
 	active: z.boolean(),
@@ -149,7 +166,8 @@ export const PipTrackingSchema = z.object({
 	area_task_counts: z.record(z.unknown()).optional(),
 	estimation_log: z.array(z.unknown()).optional(),
 	milestones: z.record(MilestoneSchema).optional(),
-	checkin_schedule: z.array(CheckinEntrySchema).optional()
+	checkin_schedule: z.array(CheckinEntrySchema).optional(),
+	mini_reports: MiniReportTrackingSchema.optional()
 });
 
 export type PipTracking = z.infer<typeof PipTrackingSchema>;
@@ -216,6 +234,17 @@ export interface ParsedStateResult {
 // --- Dashboard Display Types ---
 
 /**
+ * Today's Focus data from current_priorities
+ * Replaces the stale stated_priorities section in the dashboard
+ */
+export interface TodaysFocus {
+	immediateFocus: string | null;
+	nextActions: string | null;
+	pipStatus: string | null;
+	lastScanTime: string | null;
+}
+
+/**
  * Task formatted for dashboard display
  */
 export interface DashboardTask {
@@ -275,6 +304,18 @@ export interface DashboardCompletedTask {
 }
 
 /**
+ * Mini-report candidate detected from completed tasks
+ */
+export interface MiniReportCandidate {
+	taskName: string;
+	filename: string;
+	completedDate: string;
+	client: string;
+	project: string;
+	reason: 'document_review' | 'analysis_complete' | 'deliverable_sent' | 'meeting_prep';
+}
+
+/**
  * Full dashboard state for rendering
  */
 export interface DashboardState {
@@ -282,7 +323,8 @@ export interface DashboardState {
 	overdueTasks: DashboardTask[];
 	dueThisWeek: DashboardTask[];
 	dueNextWeek: DashboardTask[];
-	statedPriorities: StatedPriority[];
+	statedPriorities: StatedPriority[];  // Kept for data access, but UI renders todaysFocus instead
+	todaysFocus?: TodaysFocus;           // NEW: Dynamic focus from current_priorities
 	pipStatus: DashboardPipStatus | null;
 	recentlyCompleted?: DashboardCompletedTask[];
 	summaryStats: {

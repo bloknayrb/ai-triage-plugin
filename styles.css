@@ -205,10 +205,33 @@
 	font-size: 0.85em;
 }
 
+.pip-reminder-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+}
+
 .pip-reminder .reminder-text {
 	display: flex;
 	align-items: center;
 	gap: 6px;
+}
+
+.pip-eod-draft-btn {
+	font-size: 0.8em;
+	padding: 3px 10px;
+	border-radius: 4px;
+	border: 1px solid rgba(255, 255, 255, 0.5);
+	background: rgba(255, 255, 255, 0.2);
+	color: inherit;
+	cursor: pointer;
+	transition: all 0.15s ease;
+}
+
+.pip-eod-draft-btn:hover {
+	background: rgba(255, 255, 255, 0.3);
+	border-color: rgba(255, 255, 255, 0.7);
 }
 
 .pip-reminder .reminder-text::before {
@@ -391,7 +414,7 @@
 	color: var(--text-muted);
 }
 
-/* --- Stated Priorities --- */
+/* --- Stated Priorities (legacy, kept for backwards compatibility) --- */
 .priority-list {
 	display: flex;
 	flex-direction: column;
@@ -428,6 +451,40 @@
 .priority-deadline {
 	font-size: 0.8em;
 	color: var(--text-muted);
+}
+
+/* --- Today's Focus Section (replaces Stated Priorities in UI) --- */
+.section-todays-focus {
+	background-color: var(--background-secondary);
+	border-left: 3px solid var(--interactive-accent);
+	padding: 12px;
+	margin-bottom: 16px;
+	overflow-wrap: break-word;
+	border-radius: 6px;
+}
+
+.section-todays-focus .section-header h5 {
+	margin: 0 0 8px 0;
+	color: var(--text-accent);
+	display: inline;
+}
+
+.focus-immediate,
+.focus-actions {
+	margin: 8px 0;
+	line-height: 1.5;
+}
+
+.focus-immediate > strong:first-child,
+.focus-actions > strong:first-child {
+	color: var(--text-accent);
+}
+
+.stale-indicator {
+	color: var(--color-orange);
+	font-size: 0.85em;
+	margin-left: 8px;
+	font-weight: normal;
 }
 
 /* --- Habit Tracker --- */
@@ -557,10 +614,16 @@
 		grid-column: 1;
 	}
 
-	/* Right column: Strategic priorities */
+	/* Right column: Strategic priorities (legacy) */
 	.section-stated-priorities {
 		grid-column: 2;
 		grid-row-start: 2;
+	}
+
+	/* Today's Focus - full width at top in two-column layout */
+	.section-todays-focus {
+		grid-column: 1 / -1;
+		grid-row: 2;
 	}
 }
 
@@ -958,4 +1021,214 @@ details[open] > summary {
 
 .chat-send-btn:hover {
 	background: var(--interactive-accent-hover);
+}
+
+/* ==============================================
+   EOD Draft Modal Styles
+   ============================================== */
+.eod-draft-modal {
+	max-width: 600px;
+}
+
+.eod-draft-modal h2 {
+	margin-bottom: 8px;
+}
+
+.eod-draft-date {
+	color: var(--text-muted);
+	margin-bottom: 16px;
+}
+
+.eod-draft-textarea {
+	width: 100%;
+	min-height: 250px;
+	font-family: var(--font-monospace);
+	font-size: 0.9em;
+	padding: 12px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+	background: var(--background-primary);
+	resize: vertical;
+}
+
+.eod-draft-instructions {
+	font-size: 0.85em;
+	color: var(--text-muted);
+	margin: 12px 0;
+}
+
+.eod-draft-buttons {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	margin-top: 16px;
+}
+
+.eod-draft-btn {
+	padding: 8px 16px;
+	border-radius: 4px;
+	cursor: pointer;
+	border: 1px solid var(--background-modifier-border);
+	background: var(--background-primary);
+}
+
+.eod-draft-btn:hover {
+	background: var(--background-modifier-hover);
+}
+
+.eod-copy-btn {
+	background: var(--background-secondary);
+}
+
+.eod-mark-sent-btn {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	border: none;
+}
+
+.eod-mark-sent-btn:hover {
+	background: var(--interactive-accent-hover);
+}
+
+.eod-close-btn {
+	color: var(--text-muted);
+}
+
+/* ==============================================
+   Mini-Report Section Styles
+   ============================================== */
+.section-mini-reports {
+	background: var(--background-secondary);
+	border-left: 3px solid var(--color-yellow);
+	padding: 12px;
+	border-radius: 6px;
+	margin-bottom: 16px;
+}
+
+.section-mini-reports .section-header h5 {
+	color: var(--color-yellow);
+}
+
+.mini-report-list {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.mini-report-candidate {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 8px 10px;
+	background: var(--background-primary);
+	border-radius: 4px;
+	gap: 12px;
+}
+
+.mini-report-candidate:hover {
+	background: var(--background-modifier-hover);
+}
+
+.mini-report-info {
+	flex: 1;
+	min-width: 0;
+}
+
+.mini-report-title-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
+.mini-report-task {
+	font-weight: 500;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.mini-report-reason {
+	font-size: 0.7em;
+	padding: 2px 6px;
+	border-radius: 3px;
+	background: var(--background-modifier-border);
+	white-space: nowrap;
+}
+
+.mini-report-reason.reason-document_review {
+	background: var(--color-blue);
+	color: white;
+}
+
+.mini-report-reason.reason-analysis_complete {
+	background: var(--color-green);
+	color: white;
+}
+
+.mini-report-reason.reason-deliverable_sent {
+	background: var(--color-orange);
+	color: white;
+}
+
+.mini-report-reason.reason-meeting_prep {
+	background: var(--color-purple);
+	color: white;
+}
+
+.mini-report-meta {
+	display: flex;
+	gap: 8px;
+	font-size: 0.8em;
+	color: var(--text-muted);
+	margin-top: 4px;
+}
+
+.mini-report-client {
+	font-weight: 500;
+}
+
+.mini-report-actions {
+	display: flex;
+	gap: 6px;
+	flex-shrink: 0;
+}
+
+.mini-report-btn {
+	padding: 4px 10px;
+	border-radius: 4px;
+	font-size: 0.8em;
+	cursor: pointer;
+	border: 1px solid var(--background-modifier-border);
+	background: var(--background-primary);
+}
+
+.mini-report-btn:hover {
+	background: var(--background-modifier-hover);
+}
+
+.mini-report-template-btn {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	border: none;
+}
+
+.mini-report-template-btn:hover {
+	background: var(--interactive-accent-hover);
+}
+
+.mini-report-dismiss-btn {
+	color: var(--text-muted);
+	padding: 4px 8px;
+}
+
+.mini-report-dismiss-btn:hover {
+	color: var(--color-red);
+	background: rgba(var(--color-red-rgb), 0.1);
+}
+
+/* Mini-reports in two-column layout */
+@media (min-width: 600px) {
+	.section-mini-reports {
+		grid-column: 1 / -1;
+	}
 }

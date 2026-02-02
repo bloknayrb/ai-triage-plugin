@@ -8,4 +8,7 @@ export * from './change-orders';
 export * from './testing';
 export * from './interoperability';
 export * from './escalation';
+export * from './generic-task';
 export * from './weekly-report';
+export * from './eod-status';
+export * from './mini-report';

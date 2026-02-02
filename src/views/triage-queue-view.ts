@@ -53,7 +53,17 @@ export class TriageQueueView extends ItemView {
 		this.contentEl.empty();
 
 		const header = this.contentEl.createDiv({ cls: 'triage-queue-header' });
-		header.createEl('h4', { text: 'Triage Queue' });
+
+		// Title row with scan button
+		const titleRow = header.createDiv({ cls: 'triage-header-title-row' });
+		titleRow.createEl('h4', { text: 'Triage Queue' });
+
+		// Scan Now button
+		const scanBtn = titleRow.createEl('button', {
+			text: 'Scan Now',
+			cls: 'triage-scan-btn'
+		});
+		scanBtn.addEventListener('click', () => this.handleScanNow(scanBtn));
 
 		// Guard against uninitialized queue
 		if (!this.plugin.triageQueue) {
@@ -409,5 +419,55 @@ export class TriageQueueView extends ItemView {
 	private async handleEdit(item: TriageItem): Promise<void> {
 		// TODO: Implement inline editing modal
 		console.log('Edit item:', item);
+	}
+
+	/**
+	 * Handle Scan Now button click
+	 * Scans watched folders for files not yet triaged
+	 */
+	private async handleScanNow(button: HTMLButtonElement): Promise<void> {
+		if (!this.plugin.fileWatcher) {
+			new Notice('File watcher not initialized');
+			return;
+		}
+
+		if (this.plugin.fileWatcher.isScanInProgress()) {
+			new Notice('Scan already in progress');
+			return;
+		}
+
+		// Disable button and show scanning state
+		button.disabled = true;
+		const originalText = button.textContent || 'Scan Now';
+		button.textContent = 'Scanning...';
+		button.addClass('scanning');
+
+		try {
+			// Preview first to show user what will be scanned
+			const preview = await this.plugin.fileWatcher.previewScan();
+
+			if (preview.filesToTriage.length === 0) {
+				const lookbackDays = this.plugin.settings.scanLookbackDays;
+				const timeframe = lookbackDays > 0 ? `last ${lookbackDays} days` : 'all time';
+				new Notice(`No new files to triage (${timeframe})`);
+				return;
+			}
+
+			// Show what we found
+			new Notice(`Found ${preview.filesToTriage.length} files. Queuing for triage...`);
+
+			// Execute the scan
+			const queued = await this.plugin.fileWatcher.executeScan();
+
+			new Notice(`Queued ${queued} files for triage`);
+		} catch (error) {
+			const msg = error instanceof Error ? error.message : String(error);
+			new Notice(`Scan failed: ${msg}`);
+			console.error('Scan failed:', error);
+		} finally {
+			button.disabled = false;
+			button.textContent = originalText;
+			button.removeClass('scanning');
+		}
 	}
 }
