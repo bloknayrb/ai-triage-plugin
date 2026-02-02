@@ -8,3 +8,4 @@ export * from './change-orders';
 export * from './testing';
 export * from './interoperability';
 export * from './escalation';
+export * from './weekly-report';

@@ -31,6 +31,7 @@ export class PriorityDashboardView extends ItemView {
 	private stateLoader: StateLoader;
 	private dashboardState: DashboardState | null = null;
 	private refreshInterval: number | null = null;
+	private taskChangeTimer: number | null = null;
 
 	constructor(leaf: WorkspaceLeaf, plugin: AITriagePlugin) {
 		super(leaf);
@@ -65,11 +66,44 @@ export class PriorityDashboardView extends ItemView {
 			);
 			this.registerInterval(this.refreshInterval);
 		}
+
+		// Watch TaskNotes folder for status changes (instant refresh when marking tasks done)
+		this.registerEvent(
+			this.app.vault.on('modify', (file) => {
+				if (file instanceof TFile && this.isTaskNoteFile(file)) {
+					this.handleTaskNoteChange();
+				}
+			})
+		);
+	}
+
+	/**
+	 * Check if a file is in the TaskNotes folder
+	 */
+	private isTaskNoteFile(file: TFile): boolean {
+		const taskNotesFolder = this.plugin.settings.taskNotesFolder;
+		return file.path.startsWith(taskNotesFolder + '/') || file.path === taskNotesFolder;
+	}
+
+	/**
+	 * Handle TaskNote file changes with debouncing
+	 */
+	private handleTaskNoteChange(): void {
+		if (this.taskChangeTimer !== null) {
+			window.clearTimeout(this.taskChangeTimer);
+		}
+		this.taskChangeTimer = window.setTimeout(() => {
+			this.render(); // Re-render to pick up status changes
+			this.taskChangeTimer = null;
+		}, 300);
 	}
 
 	async onClose(): Promise<void> {
 		if (this.refreshInterval !== null) {
 			window.clearInterval(this.refreshInterval);
+		}
+		if (this.taskChangeTimer !== null) {
+			window.clearTimeout(this.taskChangeTimer);
 		}
 	}
 
@@ -274,33 +308,89 @@ export class PriorityDashboardView extends ItemView {
 
 	/**
 	 * Render a task section (Overdue, Due This Week, etc.)
+	 * Returns the number of tasks actually rendered (after filtering completed)
 	 */
 	private renderTaskSection(
 		container: HTMLElement,
 		title: string,
 		tasks: DashboardTask[],
 		sectionClass: string
-	): void {
+	): number {
+		// Pre-filter to count how many tasks will actually render
+		const activeTasks = tasks.filter(task => {
+			const liveStatus = this.getLiveTaskStatus(task.filename);
+			return !this.isTaskCompleted(liveStatus);
+		});
+
+		// Don't render section if all tasks are completed
+		if (activeTasks.length === 0) {
+			return 0;
+		}
+
 		const section = container.createDiv({ cls: `dashboard-section section-${sectionClass}` });
 
 		const header = section.createDiv({ cls: 'section-header' });
-		header.createEl('h5', { text: `${title} (${tasks.length})` });
+		header.createEl('h5', { text: `${title} (${activeTasks.length})` });
 
 		const list = section.createDiv({ cls: 'task-list' });
 
-		for (const task of tasks) {
+		for (const task of activeTasks) {
 			this.renderTaskItem(list, task, sectionClass);
 		}
+
+		return activeTasks.length;
+	}
+
+	/**
+	 * Get the live status of a TaskNote from its frontmatter
+	 * Returns null if file not found (falls back to state file status)
+	 */
+	private getLiveTaskStatus(filename: string): string | null {
+		const taskNotesFolder = this.plugin.settings.taskNotesFolder;
+
+		// Try multiple path variations to find the file
+		const paths = [
+			`${taskNotesFolder}/${filename}`,
+			filename,
+			`${filename}.md`,
+			`${taskNotesFolder}/${filename}.md`
+		];
+
+		for (const path of paths) {
+			const file = this.app.vault.getAbstractFileByPath(path);
+			if (file instanceof TFile) {
+				const cache = this.app.metadataCache.getFileCache(file);
+				const status = cache?.frontmatter?.status;
+				return typeof status === 'string' ? status.toLowerCase() : null;
+			}
+		}
+		return null; // File not found, use state file status
+	}
+
+	/**
+	 * Check if a status indicates the task is completed
+	 */
+	private isTaskCompleted(liveStatus: string | null): boolean {
+		if (!liveStatus) return false;
+		const normalized = liveStatus.replace(/[_-]/g, '_');
+		return ['completed', 'done', 'closed'].includes(normalized);
 	}
 
 	/**
 	 * Render a single task item
+	 * Returns true if task was rendered, false if skipped (e.g., completed)
 	 */
 	private renderTaskItem(
 		container: HTMLElement,
 		task: DashboardTask,
 		sectionClass: string
-	): void {
+	): boolean {
+		// Check live status from TaskNote file - skip if marked completed
+		const liveStatus = this.getLiveTaskStatus(task.filename);
+		if (this.isTaskCompleted(liveStatus)) {
+			return false; // Task completed, don't render
+		}
+
 		const item = container.createDiv({
 			cls: `task-item task-${sectionClass} task-priority-${task.priority}`
 		});
@@ -346,12 +436,25 @@ export class PriorityDashboardView extends ItemView {
 				cls: 'task-due'
 			});
 		}
+
+		return true; // Task was rendered
 	}
 
 	/**
 	 * Render stated priorities section
 	 */
 	private renderStatedPriorities(container: HTMLElement, priorities: StatedPriority[]): void {
+		// Filter out completed priorities
+		const activePriorities = priorities.filter(priority => {
+			const liveStatus = this.getLiveTaskStatus(priority.tasknote);
+			return !this.isTaskCompleted(liveStatus);
+		});
+
+		// Don't render section if all priorities are completed
+		if (activePriorities.length === 0) {
+			return;
+		}
+
 		const section = container.createDiv({ cls: 'dashboard-section section-stated-priorities' });
 
 		const header = section.createDiv({ cls: 'section-header' });
@@ -359,7 +462,7 @@ export class PriorityDashboardView extends ItemView {
 
 		const list = section.createDiv({ cls: 'priority-list' });
 
-		for (const priority of priorities) {
+		for (const priority of activePriorities) {
 			const item = list.createDiv({ cls: 'priority-item' });
 			item.addEventListener('click', () => this.openTaskNote(priority.tasknote));
 
@@ -436,15 +539,36 @@ export class PriorityDashboardView extends ItemView {
 	}
 
 	/**
-	 * Render footer with last updated timestamp
+	 * Render footer with last updated timestamp and action buttons
 	 */
 	private renderFooter(state: DashboardState): void {
 		const footer = this.contentEl.createDiv({ cls: 'dashboard-footer' });
 
+		// Last updated timestamp
 		if (state.lastUpdated) {
 			footer.createSpan({
 				text: `Last updated: ${state.lastUpdated}`,
 				cls: 'last-updated'
+			});
+		}
+
+		// Generate Report button (only when PIP is active)
+		if (state.pipStatus?.active) {
+			const buttonRow = footer.createDiv({ cls: 'footer-actions' });
+
+			const generateBtn = buttonRow.createEl('button', {
+				text: 'Generate weekly report',
+				cls: 'dashboard-action-btn generate-report-btn'
+			});
+			generateBtn.addEventListener('click', async () => {
+				generateBtn.disabled = true;
+				generateBtn.textContent = 'Generating...';
+				try {
+					await this.plugin.generateWeeklyReport();
+				} finally {
+					generateBtn.disabled = false;
+					generateBtn.textContent = 'Generate weekly report';
+				}
 			});
 		}
 	}

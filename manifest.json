@@ -1,9 +1,9 @@
 {
 	"id": "ai-triage",
-	"name": "AI Triage",
-	"version": "0.1.0",
+	"name": "Priority Dashboard",
+	"version": "0.3.0",
 	"minAppVersion": "1.0.0",
-	"description": "AI-powered triage for incoming emails and Teams messages with tolling domain expertise. Uses local Ollama for classification.",
+	"description": "Priority dashboard displaying tracked tasks from Claude-State-Tracking.md with PIP coaching, habit tracking, and weekly report generation.",
 	"author": "Brian Kolb",
 	"authorUrl": "https://github.com/bkolb",
 	"isDesktopOnly": true
